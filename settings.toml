@@ -1,0 +1,9 @@
+[aravoxel]
+version = 0.1
+
+[voxel_settings]
+chunk_size = 32
+
+[window]
+height = 1080
+width = 1920
