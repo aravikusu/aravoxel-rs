@@ -69,6 +69,7 @@ impl Aravoxel<'_> {
         };
         surface.configure(&device, &config);
 
+        let scene = WgpuTutorial::new(&device, &config);
         Self {
             window,
             surface,
@@ -76,7 +77,7 @@ impl Aravoxel<'_> {
             queue,
             config,
             size,
-            scene: WgpuTutorial {},
+            scene: *scene,
         }
     }
 

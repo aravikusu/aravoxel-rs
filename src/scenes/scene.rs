@@ -1,8 +1,7 @@
-use wgpu::{CommandEncoder, TextureView};
 use winit::event::Event;
 
 pub trait Scene {
-    fn init() {
+    fn new(device: &wgpu::Device, config: &wgpu::SurfaceConfiguration) -> Box<Self> {
         todo!()
     }
 
@@ -11,7 +10,7 @@ pub trait Scene {
     }
 
     // Called by aravoxel every frame.
-    fn render(&mut self, view: &TextureView, mut encoder: &mut CommandEncoder) {
+    fn render(&mut self, view: &wgpu::TextureView, mut encoder: &mut wgpu::CommandEncoder) {
         todo!()
     }
 
