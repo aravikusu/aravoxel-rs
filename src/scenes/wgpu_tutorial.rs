@@ -1,42 +1,12 @@
-use wgpu::util::DeviceExt;
 use winit::event::Event;
+
+use crate::engine::utils::Vertex;
+use crate::meshes::mesh::Mesh;
 use crate::scenes::scene::Scene;
 
 pub struct WgpuTutorial {
     render_pipeline: wgpu::RenderPipeline,
-    vertex_buffer: wgpu::Buffer,
-    index_buffer: wgpu::Buffer,
-    num_indices: u32,
-}
-
-type Vector3 = [f32; 3];
-
-#[repr(C)]
-#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-struct Vertex {
-    position: Vector3,
-    color: Vector3
-}
-
-impl Vertex {
-    fn desc() -> wgpu::VertexBufferLayout<'static> {
-        wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &[
-                wgpu::VertexAttribute {
-                    offset: 0,
-                    shader_location: 0,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
-                wgpu::VertexAttribute {
-                    offset: std::mem::size_of::<Vector3>() as wgpu::BufferAddress,
-                    shader_location: 1,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
-            ]
-        }
-    }
+    mesh: Mesh,
 }
 
 const VERTICES: &[Vertex] = &[
@@ -55,21 +25,7 @@ const INDICES: &[u16] = &[
 
 impl Scene for WgpuTutorial {
     fn new(device: &wgpu::Device, config: &wgpu::SurfaceConfiguration) -> Box<Self> {
-        let vertex_buffer = device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
-                label: Some("WgpuTutorial Vertex Buffer"),
-                contents: bytemuck::cast_slice(VERTICES),
-                usage: wgpu::BufferUsages::VERTEX,
-            }
-        );
-
-        let index_buffer = device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
-                label: Some("WgpuTutorial Index Buffer"),
-                contents: bytemuck::cast_slice(INDICES),
-                usage: wgpu::BufferUsages::INDEX
-            }
-        );
+        let mesh = Mesh::new(VERTICES, INDICES, &device);
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("WgpuTutorial Shader"),
@@ -126,9 +82,7 @@ impl Scene for WgpuTutorial {
 
         Box::from(Self {
             render_pipeline,
-            vertex_buffer,
-            index_buffer,
-            num_indices: INDICES.len() as u32
+            mesh,
         })
     }
 
@@ -161,9 +115,9 @@ impl Scene for WgpuTutorial {
         });
 
         render_pass.set_pipeline(&self.render_pipeline);
-        render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-        render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-        render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
+        render_pass.set_vertex_buffer(0, self.mesh.vertex_buffer.slice(..));
+        render_pass.set_index_buffer(self.mesh.index_buffer.as_ref().unwrap().slice(..), wgpu::IndexFormat::Uint16);
+        render_pass.draw_indexed(0..self.mesh.amount, 0, 0..1);
     }
 
     fn input(&mut self, _event: &Event<()>) {
