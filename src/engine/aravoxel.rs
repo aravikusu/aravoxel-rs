@@ -97,8 +97,7 @@ impl Aravoxel<'_> {
     }
 
     //TODO: Refactor this and make use of whatever scene's own input function
-    fn input(&mut self, event: &Event<()>) -> bool {
-        false
+    fn input(&mut self, _event: &Event<()>) {
     }
 
     fn update(&mut self) {
