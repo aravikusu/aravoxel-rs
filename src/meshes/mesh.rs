@@ -2,6 +2,9 @@ use wgpu::util::DeviceExt;
 
 use crate::engine::utils::Vertex;
 
+/// A struct that is part of every Mesh.
+/// It contains the vertex buffer, and if applicable,
+/// the index buffer.
 pub struct Mesh {
     pub vertex_buffer: wgpu::Buffer,
     pub index_buffer: Option<wgpu::Buffer>,
@@ -37,5 +40,9 @@ impl Mesh {
             index_buffer,
             amount: if has_indices { indices.len() } else { vertices.len() } as u32,
         }
+    }
+
+    pub fn has_indices(&self) -> bool {
+        return self.index_buffer.is_some()
     }
 }
