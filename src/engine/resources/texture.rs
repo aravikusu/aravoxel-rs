@@ -1,3 +1,4 @@
+use std::io::Read;
 use image::GenericImageView;
 
 pub struct Texture {
@@ -6,18 +7,22 @@ pub struct Texture {
     pub sampler: wgpu::Sampler,
 }
 
+const TEXTURE_FOLDER_PATH: &str = "assets/";
+
 impl Texture {
-    pub fn from_bytes(
+    pub fn new(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        bytes: &[u8],
         label: &str,
     ) -> anyhow::Result<Self> {
-        let img = image::load_from_memory(bytes)?;
-        Self::from_image(device, queue, &img, Some(label))
+        let path = format!("{TEXTURE_FOLDER_PATH}{label}");
+        println!("{path}");
+        let img = image::open(path)?;
+
+        Self::create(device, queue, &img, Some(label))
     }
 
-    pub fn from_image(
+    fn create(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         img: &image::DynamicImage,
@@ -34,7 +39,7 @@ impl Texture {
 
         let texture = device.create_texture(
             &wgpu::TextureDescriptor {
-                label: Some("Diffuse texture"),
+                label: Some(label.unwrap()),
                 size: texture_size,
                 mip_level_count: 1,
                 sample_count: 1,

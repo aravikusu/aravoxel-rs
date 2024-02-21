@@ -1,4 +1,3 @@
-use image::GenericImageView;
 use winit::event::Event;
 use crate::engine::resources::texture::Texture;
 
@@ -31,9 +30,7 @@ const INDICES: &[u16] = &[
 impl Scene for WgpuTutorial {
     fn new(device: &wgpu::Device, config: &wgpu::SurfaceConfiguration, queue: &wgpu::Queue) -> Box<Self> {
         let mesh = Mesh::new(VERTICES, INDICES, &device);
-
-        let diffuse_bytes = include_bytes!("../../assets/happy-tree.png");
-        let diffuse_texture = Texture::from_bytes(&device, &queue, diffuse_bytes, "happy-tree.png").unwrap();
+        let diffuse_texture = Texture::new(&device, &queue, "happy-tree.png").unwrap();
 
 
         let texture_bind_group_layout =
@@ -128,7 +125,6 @@ impl Scene for WgpuTutorial {
                 },
                 multiview: None,
             });
-
         Box::from(Self {
             render_pipeline,
             mesh,
