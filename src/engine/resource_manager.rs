@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use log::error;
-use crate::engine::resources::texture::Texture;
+use crate::engine::resource::texture::Texture;
 
-/// The ResourceManager stores all of a scenes loaded textures and shaders,
+/// The ResourceManager stores all of a scene loaded textures and shaders,
 /// as well as giving you an easy way to access them.
 pub struct ResourceManager {
     textures: HashMap<String, Texture>,

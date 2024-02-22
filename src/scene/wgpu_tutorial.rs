@@ -1,10 +1,9 @@
 use winit::event::Event;
 use crate::engine::resource_manager::ResourceManager;
-use crate::engine::resources::texture::Texture;
 
-use crate::engine::utils::Vertex;
-use crate::meshes::mesh::Mesh;
-use crate::scenes::scene::Scene;
+use crate::engine::util::Vertex;
+use crate::mesh::mesh::Mesh;
+use crate::scene::scene::Scene;
 
 pub struct WgpuTutorial {
     render_pipeline: wgpu::RenderPipeline,
@@ -31,9 +30,9 @@ const INDICES: &[u16] = &[
 impl Scene for WgpuTutorial {
     fn new(device: &wgpu::Device, config: &wgpu::SurfaceConfiguration, queue: &wgpu::Queue) -> Box<Self> {
         let mesh = Mesh::new(VERTICES, INDICES, &device);
+
         let mut resource_manager = ResourceManager::new();
         let diffuse_texture = resource_manager.load_texture(&device, &queue, "happy-tree.png", "happytree".to_string());
-
 
         let texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {

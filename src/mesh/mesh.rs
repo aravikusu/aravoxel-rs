@@ -1,6 +1,6 @@
 use wgpu::util::DeviceExt;
 
-use crate::engine::utils::Vertex;
+use crate::engine::util::Vertex;
 
 /// A struct that is part of every Mesh.
 /// It contains the vertex buffer, and if applicable,

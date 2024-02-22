@@ -3,9 +3,9 @@ use winit::event::{ElementState, Event, KeyEvent, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{Window, WindowBuilder};
-use crate::scenes;
-use crate::scenes::scene::Scene;
-use crate::scenes::wgpu_tutorial::WgpuTutorial;
+use crate::scene;
+use crate::scene::scene::Scene;
+use crate::scene::wgpu_tutorial::WgpuTutorial;
 
 /// The engine itself. Handles everything relating to the window and
 /// ensuring that the right states are doing the things.
@@ -17,7 +17,7 @@ pub struct Aravoxel<'window> {
     size: winit::dpi::PhysicalSize<u32>,
     window: Arc<Window>,
 
-    scene: scenes::wgpu_tutorial::WgpuTutorial,
+    scene: scene::wgpu_tutorial::WgpuTutorial,
 }
 
 impl Aravoxel<'_> {

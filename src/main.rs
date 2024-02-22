@@ -1,7 +1,7 @@
 
 mod engine;
-mod scenes;
-mod meshes;
+mod scene;
+mod mesh;
 
 fn main() {
     pollster::block_on(engine::aravoxel::run());

@@ -37,11 +37,11 @@ pub struct Vertex {
     pub tex_coords: Vector2
 }
 
-impl crate::engine::utils::Vertex {
+impl crate::engine::util::Vertex {
     pub fn desc() -> wgpu::VertexBufferLayout<'static> {
         use std::mem;
         wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<crate::engine::utils::Vertex>() as wgpu::BufferAddress,
+            array_stride: std::mem::size_of::<crate::engine::util::Vertex>() as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &[
                 wgpu::VertexAttribute {

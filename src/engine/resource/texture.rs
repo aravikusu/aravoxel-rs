@@ -1,4 +1,3 @@
-use std::io::Read;
 use image::GenericImageView;
 
 pub struct Texture {
