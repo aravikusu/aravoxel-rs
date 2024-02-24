@@ -1,10 +1,10 @@
 use wgpu::util::DeviceExt;
-use winit::event::Event;
-use crate::engine::resource::texture::Texture;
+use winit::event::WindowEvent;
 
+use crate::engine::resource::texture::Texture;
 use crate::engine::resource_manager::ResourceManager;
 use crate::engine::util::Vertex;
-use crate::entity::camera::{Camera, CameraUniform};
+use crate::entity::camera::{Camera, CameraController, CameraUniform};
 use crate::mesh::mesh::Mesh;
 use crate::scene::scene::Scene;
 
@@ -14,10 +14,10 @@ pub struct WgpuTutorial {
     diffuse_bind_group: wgpu::BindGroup,
     resource_manager: ResourceManager,
 
-    camera: Camera,
+    camera_controller: CameraController,
     camera_uniform: CameraUniform,
     camera_buffer: wgpu::Buffer,
-    camera_bind_group: wgpu::BindGroup
+    camera_bind_group: wgpu::BindGroup,
 }
 
 const VERTICES: &[Vertex] = &[
@@ -46,7 +46,8 @@ impl Scene for WgpuTutorial {
         let diffuse_bind_group = diffuse_texture.create_bind_group(&texture_bind_group_layout, &device);
 
         // Camera
-        let camera = Camera::new(
+        let camera_controller = CameraController::new(
+            0.2,
             (0.0, 1.0, 2.0).into(),
             (0.0, 0.0, 0.0).into(),
             glam::Vec3::Y,
@@ -57,7 +58,7 @@ impl Scene for WgpuTutorial {
         );
 
         let mut camera_uniform = CameraUniform::new();
-        camera_uniform.update_view_proj(&camera);
+        camera_uniform.update_view_proj(&camera_controller.camera);
 
         let camera_buffer = device.create_buffer_init(
             &wgpu::util::BufferInitDescriptor {
@@ -156,15 +157,17 @@ impl Scene for WgpuTutorial {
             mesh,
             diffuse_bind_group,
             resource_manager,
-            camera,
+            camera_controller,
             camera_uniform,
             camera_buffer,
-            camera_bind_group
+            camera_bind_group,
         })
     }
 
-    fn update(&mut self) {
-        todo!()
+    fn update(&mut self, queue: &wgpu::Queue) {
+        self.camera_controller.update_camera();
+        self.camera_uniform.update_view_proj(&self.camera_controller.camera);
+        queue.write_buffer(&self.camera_buffer, 0, bytemuck::cast_slice(&[self.camera_uniform]))
     }
 
     fn render(&mut self, view: &wgpu::TextureView, encoder: &mut wgpu::CommandEncoder) {
@@ -199,7 +202,12 @@ impl Scene for WgpuTutorial {
         render_pass.draw_indexed(0..self.mesh.amount, 0, 0..1);
     }
 
-    fn input(&mut self, _event: &Event<()>) {
-        todo!()
+    fn input(&mut self, event: &WindowEvent) {
+        match event {
+            WindowEvent::KeyboardInput { event, ..} => {
+                self.camera_controller.keyboard_input(&event);
+            }
+            _ => ()
+        }
     }
 }

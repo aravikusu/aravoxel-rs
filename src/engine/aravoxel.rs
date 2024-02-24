@@ -97,11 +97,12 @@ impl Aravoxel<'_> {
     }
 
     //TODO: Refactor this and make use of whatever scene's own input function
-    fn input(&mut self, _event: &Event<()>) {
+    fn input(&mut self, event: &WindowEvent) {
+        self.scene.input(&event);
     }
 
     fn update(&mut self) {
-
+        self.scene.update(&self.queue);
     }
 
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
@@ -137,54 +138,36 @@ pub async fn run() {
 
     event_loop.set_control_flow(ControlFlow::Poll);
     event_loop.run(move |event, elwt| {
-        // This function handles scene specific input.
-        aravoxel.input(&event);
-
-        // Everything related to just normal events, like closing/resizing.
+        // Everything related to just window specific events.
         match event {
             // We wanna redraw every frame, so let's request redraws whenever the window wants to idle.
             Event::AboutToWait => {
                 aravoxel.window().request_redraw();
             }
-            // The general update/render loop goes here.
-            Event::WindowEvent {
-                event: WindowEvent::RedrawRequested,
-                window_id
-            } => {
+            Event::WindowEvent { event, window_id} => {
                 if window_id == aravoxel.window().id() {
-                    aravoxel.update();
-
-                    match aravoxel.render() {
-                        Ok(_) => {}
-                        // Reconfigure if we lose the surface.
-                        Err(wgpu::SurfaceError::Lost) => aravoxel.resize(aravoxel.size),
-                        // Out of memory, let's bail.
-                        Err(wgpu::SurfaceError::OutOfMemory) => elwt.exit(),
-                        // Uhh... something's wrong.
-                        Err(e) => eprintln!("{:?}", e),
+                    // This function handles scene specific input.
+                    aravoxel.input(&event);
+                    match event {
+                        WindowEvent::RedrawRequested => {
+                            aravoxel.update();
+                            match aravoxel.render() {
+                                Ok(_) => {}
+                                // Reconfigure if we lose the surface.
+                                Err(wgpu::SurfaceError::Lost) => aravoxel.resize(aravoxel.size),
+                                // Out of memory, let's bail.
+                                Err(wgpu::SurfaceError::OutOfMemory) => elwt.exit(),
+                                // Uhh... something's wrong.
+                                Err(e) => eprintln!("{:?}", e),
+                            }
+                        }
+                        WindowEvent::Resized(physical_size) => {
+                            aravoxel.resize(physical_size);
+                        }
+                        WindowEvent::CloseRequested => elwt.exit(),
+                        _ => ()
                     }
                 }
-            }
-            Event::WindowEvent {
-                event: WindowEvent::CloseRequested | WindowEvent::KeyboardInput {
-                    event: KeyEvent {
-                        state: ElementState::Pressed,
-                        physical_key: PhysicalKey::Code(KeyCode::Escape),
-                        ..
-                    },
-                    ..
-                },
-                window_id,
-            } => {
-                if window_id == aravoxel.window().id() {
-                    elwt.exit();
-                }
-            }
-            Event::WindowEvent {
-                event: WindowEvent::Resized(physical_size),
-                ..
-            } => {
-                aravoxel.resize(physical_size);
             }
             _ => ()
         }
