@@ -1,4 +1,4 @@
-use winit::event::{Event, WindowEvent};
+use winit::event::WindowEvent;
 
 /// All of our Scenes implement this.
 pub trait Scene {

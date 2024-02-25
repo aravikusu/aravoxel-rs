@@ -4,7 +4,7 @@ use winit::event::WindowEvent;
 use crate::engine::resource::texture::Texture;
 use crate::engine::resource_manager::ResourceManager;
 use crate::engine::util::Vertex;
-use crate::entity::camera::{Camera, CameraController, CameraUniform};
+use crate::entity::camera::{CameraController, CameraUniform};
 use crate::mesh::mesh::Mesh;
 use crate::scene::scene::Scene;
 
