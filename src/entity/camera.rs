@@ -2,7 +2,8 @@ use winit::event::KeyEvent;
 use winit::keyboard::{KeyCode, PhysicalKey};
 
 pub struct CameraController {
-    pub(crate) camera: Camera,
+    pub camera: Camera,
+    pub camera_uniform: CameraUniform,
 
     speed: f32,
     is_forward_pressed: bool,
@@ -12,7 +13,7 @@ pub struct CameraController {
 }
 
 impl CameraController {
-    pub(crate) fn new(
+    pub fn new(
         speed: f32,
         eye: glam::Vec3,
         target: glam::Vec3,
@@ -22,16 +23,21 @@ impl CameraController {
         z_near: f32,
         z_far: f32,
     ) -> Self {
+        let camera = Camera::new(
+            eye,
+            target,
+            up,
+            aspect,
+            fov_y,
+            z_near,
+            z_far,
+        );
+        let mut camera_uniform = CameraUniform::new();
+        camera_uniform.update_view_proj(&camera);
+
         Self {
-            camera: Camera::new(
-                eye,
-                target,
-                up,
-                aspect,
-                fov_y,
-                z_near,
-                z_far,
-            ),
+            camera,
+            camera_uniform,
             speed,
             is_forward_pressed: false,
             is_backward_pressed: false,
