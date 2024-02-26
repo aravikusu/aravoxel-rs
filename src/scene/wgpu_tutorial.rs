@@ -3,8 +3,8 @@ use winit::event::WindowEvent;
 
 use crate::engine::resource::texture::Texture;
 use crate::engine::resource_manager::ResourceManager;
-use crate::engine::util::Vertex;
-use crate::entity::camera::{CameraController, CameraUniform};
+use crate::engine::util::{Instance, InstanceRaw, Vertex};
+use crate::entity::camera::CameraController;
 use crate::mesh::mesh::Mesh;
 use crate::scene::scene::Scene;
 
@@ -15,9 +15,11 @@ pub struct WgpuTutorial {
     resource_manager: ResourceManager,
 
     camera_controller: CameraController,
-    camera_uniform: CameraUniform,
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
+
+    instances: Vec<Instance>,
+    instance_buffer: wgpu::Buffer,
 }
 
 const VERTICES: &[Vertex] = &[
@@ -35,6 +37,9 @@ const INDICES: &[u16] = &[
     2, 3, 4,
 ];
 
+const NUM_INSTANCS_PER_ROW: u32 = 10;
+const INSTANCE_DISPLACEMENT: glam::Vec3 = glam::Vec3::new(NUM_INSTANCS_PER_ROW as f32 * 0.5, 0.0, NUM_INSTANCS_PER_ROW as f32 * 0.5);
+
 impl Scene for WgpuTutorial {
     fn new(device: &wgpu::Device, config: &wgpu::SurfaceConfiguration, queue: &wgpu::Queue) -> Box<Self> {
         let mesh = Mesh::new(VERTICES, INDICES, &device);
@@ -45,7 +50,7 @@ impl Scene for WgpuTutorial {
         let texture_bind_group_layout = Texture::bind_group_layout(&device);
         let diffuse_bind_group = diffuse_texture.create_bind_group(&texture_bind_group_layout, &device);
 
-        // Camera
+        // Camera - more refactor needed
         let camera_controller = CameraController::new(
             0.2,
             (0.0, 1.0, 2.0).into(),
@@ -57,13 +62,10 @@ impl Scene for WgpuTutorial {
             100.0,
         );
 
-        let mut camera_uniform = CameraUniform::new();
-        camera_uniform.update_view_proj(&camera_controller.camera);
-
         let camera_buffer = device.create_buffer_init(
             &wgpu::util::BufferInitDescriptor {
                 label: Some("Camera buffer"),
-                contents: bytemuck::cast_slice(&[camera_uniform]),
+                contents: bytemuck::cast_slice(&[camera_controller.camera_uniform]),
                 usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             }
         );
@@ -97,6 +99,36 @@ impl Scene for WgpuTutorial {
             ],
         });
 
+        // Instances - refactor into its own thing
+        let instances = (0..NUM_INSTANCS_PER_ROW).flat_map(|z| {
+            (0..NUM_INSTANCS_PER_ROW).map(move |x| {
+                let position = glam::Vec3 {
+                    x: x as f32,
+                    y: 0.0,
+                    z: z as f32,
+                };
+
+                let rotation = if position.is_nan() {
+                    // Needed so an object at (0, 0, 0) doesn't get scaled to 0
+                    // since Quaternions can effect scale if they're not "correct"
+                    glam::Quat::from_axis_angle(glam::Vec3::Z, 0.0)
+                } else {
+                    glam::Quat::from_axis_angle(position.normalize(), 45.0)
+                };
+
+                Instance { position, rotation }
+            })
+        }).collect::<Vec<_>>();
+
+        let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
+        let instance_buffer = device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("Instance buffer"),
+                contents: bytemuck::cast_slice(&instance_data),
+                usage: wgpu::BufferUsages::VERTEX
+            }
+        );
+
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("WgpuTutorial Shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/shader.wgsl").into()),
@@ -121,6 +153,7 @@ impl Scene for WgpuTutorial {
                     entry_point: "vs_main",
                     buffers: &[
                         Vertex::desc(),
+                        InstanceRaw::desc(),
                     ],
                 },
                 fragment: Some(wgpu::FragmentState {
@@ -158,16 +191,17 @@ impl Scene for WgpuTutorial {
             diffuse_bind_group,
             resource_manager,
             camera_controller,
-            camera_uniform,
             camera_buffer,
             camera_bind_group,
+            instances,
+            instance_buffer
         })
     }
 
     fn update(&mut self, queue: &wgpu::Queue) {
         self.camera_controller.update_camera();
-        self.camera_uniform.update_view_proj(&self.camera_controller.camera);
-        queue.write_buffer(&self.camera_buffer, 0, bytemuck::cast_slice(&[self.camera_uniform]))
+        self.camera_controller.camera_uniform.update_view_proj(&self.camera_controller.camera);
+        queue.write_buffer(&self.camera_buffer, 0, bytemuck::cast_slice(&[self.camera_controller.camera_uniform]))
     }
 
     fn render(&mut self, view: &wgpu::TextureView, encoder: &mut wgpu::CommandEncoder) {
@@ -198,13 +232,15 @@ impl Scene for WgpuTutorial {
         render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
         render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
         render_pass.set_vertex_buffer(0, self.mesh.vertex_buffer.slice(..));
+        render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
         render_pass.set_index_buffer(self.mesh.index_buffer.as_ref().unwrap().slice(..), wgpu::IndexFormat::Uint16);
-        render_pass.draw_indexed(0..self.mesh.amount, 0, 0..1);
+
+        render_pass.draw_indexed(0..self.mesh.amount, 0, 0..self.instances.len() as _);
     }
 
     fn input(&mut self, event: &WindowEvent) {
         match event {
-            WindowEvent::KeyboardInput { event, ..} => {
+            WindowEvent::KeyboardInput { event, .. } => {
                 self.camera_controller.keyboard_input(&event);
             }
             _ => ()
