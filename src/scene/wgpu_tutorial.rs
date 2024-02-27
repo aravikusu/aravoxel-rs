@@ -1,10 +1,9 @@
-use wgpu::util::DeviceExt;
 use winit::event::WindowEvent;
 
 use crate::engine::resource::texture::Texture;
 use crate::engine::resource_manager::ResourceManager;
 use crate::engine::util::{Instance, InstanceRaw, Vertex};
-use crate::entity::camera::CameraController;
+use crate::entity::camera::{Camera, CameraController};
 use crate::mesh::mesh::Mesh;
 use crate::scene::scene::Scene;
 
@@ -15,7 +14,6 @@ pub struct WgpuTutorial {
     resource_manager: ResourceManager,
 
     camera_controller: CameraController,
-    camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
 
     instances: Vec<Instance>,
@@ -60,46 +58,12 @@ impl Scene for WgpuTutorial {
             45.0,
             0.1,
             100.0,
+            &device,
         );
+        let camera_bind_group_layout = Camera::bind_group_layout(&device);
+        let camera_bind_group = camera_controller.camera.create_bind_group(&camera_bind_group_layout, &device);
 
-        let camera_buffer = device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
-                label: Some("Camera buffer"),
-                contents: bytemuck::cast_slice(&[camera_controller.camera_uniform]),
-                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            }
-        );
-
-        let camera_bind_group_layout = device.create_bind_group_layout(
-            &wgpu::BindGroupLayoutDescriptor {
-                label: Some("Camera bind group layout"),
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::VERTEX,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
-                ],
-            }
-        );
-
-        let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Camera bind group"),
-            layout: &camera_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: camera_buffer.as_entire_binding(),
-                }
-            ],
-        });
-
-        // Instances - refactor into its own thing
+        // Instances - iterate through the amount we have, then create a buffer.
         let instances = (0..NUM_INSTANCS_PER_ROW).flat_map(|z| {
             (0..NUM_INSTANCS_PER_ROW).map(move |x| {
                 let position = glam::Vec3 {
@@ -119,15 +83,7 @@ impl Scene for WgpuTutorial {
                 Instance { position, rotation }
             })
         }).collect::<Vec<_>>();
-
-        let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
-        let instance_buffer = device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
-                label: Some("Instance buffer"),
-                contents: bytemuck::cast_slice(&instance_data),
-                usage: wgpu::BufferUsages::VERTEX
-            }
-        );
+        let instance_buffer = InstanceRaw::create_buffer(&instances, &device);
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("WgpuTutorial Shader"),
@@ -191,17 +147,16 @@ impl Scene for WgpuTutorial {
             diffuse_bind_group,
             resource_manager,
             camera_controller,
-            camera_buffer,
             camera_bind_group,
             instances,
-            instance_buffer
+            instance_buffer,
         })
     }
 
     fn update(&mut self, queue: &wgpu::Queue) {
         self.camera_controller.update_camera();
         self.camera_controller.camera_uniform.update_view_proj(&self.camera_controller.camera);
-        queue.write_buffer(&self.camera_buffer, 0, bytemuck::cast_slice(&[self.camera_controller.camera_uniform]))
+        queue.write_buffer(&self.camera_controller.camera.buffer, 0, bytemuck::cast_slice(&[self.camera_controller.camera_uniform]))
     }
 
     fn render(&mut self, view: &wgpu::TextureView, encoder: &mut wgpu::CommandEncoder) {

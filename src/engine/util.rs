@@ -1,4 +1,5 @@
 use std::mem;
+use wgpu::util::DeviceExt;
 
 pub type Vector3 = [f32; 3];
 pub type Vector2 = [f32; 2];
@@ -112,5 +113,17 @@ impl InstanceRaw {
 
             ],
         }
+    }
+
+    // Takes a Vec of Instances and turns them into a buffer that can be ussed in a RenderPipeline.
+    pub fn create_buffer(instances: &Vec<Instance>, device: &wgpu::Device) -> wgpu::Buffer {
+        let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
+        device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("Instance buffer"),
+                contents: bytemuck::cast_slice(&instance_data),
+                usage: wgpu::BufferUsages::VERTEX,
+            }
+        )
     }
 }

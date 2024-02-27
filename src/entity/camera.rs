@@ -1,3 +1,4 @@
+use wgpu::util::DeviceExt;
 use winit::event::KeyEvent;
 use winit::keyboard::{KeyCode, PhysicalKey};
 
@@ -22,8 +23,19 @@ impl CameraController {
         fov_y: f32,
         z_near: f32,
         z_far: f32,
+        device: &wgpu::Device,
     ) -> Self {
-        let camera = Camera::new(
+        let mut camera_uniform = CameraUniform::new();
+
+        let buffer = device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("Camera buffer"),
+                contents: bytemuck::cast_slice(&[camera_uniform]),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            }
+        );
+
+        let camera = Camera {
             eye,
             target,
             up,
@@ -31,8 +43,9 @@ impl CameraController {
             fov_y,
             z_near,
             z_far,
-        );
-        let mut camera_uniform = CameraUniform::new();
+            buffer,
+        };
+
         camera_uniform.update_view_proj(&camera);
 
         Self {
@@ -46,7 +59,7 @@ impl CameraController {
         }
     }
 
-    pub(crate) fn keyboard_input(&mut self, event: &KeyEvent) {
+    pub fn keyboard_input(&mut self, event: &KeyEvent) {
         match event.physical_key {
             PhysicalKey::Code(KeyCode::KeyW) | PhysicalKey::Code(KeyCode::ArrowUp) => {
                 self.is_forward_pressed = event.state.is_pressed()
@@ -97,6 +110,8 @@ impl CameraController {
 }
 
 pub struct Camera {
+    pub buffer: wgpu::Buffer,
+
     eye: glam::Vec3,
     target: glam::Vec3,
     up: glam::Vec3,
@@ -107,25 +122,6 @@ pub struct Camera {
 }
 
 impl Camera {
-    pub fn new(
-        eye: glam::Vec3,
-        target: glam::Vec3,
-        up: glam::Vec3,
-        aspect: f32,
-        fov_y: f32,
-        z_near: f32,
-        z_far: f32,
-    ) -> Self {
-        Self {
-            eye,
-            target,
-            up,
-            aspect,
-            fov_y,
-            z_near,
-            z_far,
-        }
-    }
     pub fn build_view_projection_matrix(&self) -> glam::Mat4 {
         // View matrix - ensures the world is at the position and rotation of our camera.
         let view = glam::Mat4::look_at_rh(self.eye, self.target, self.up);
@@ -133,6 +129,39 @@ impl Camera {
         let proj = glam::Mat4::perspective_rh(self.fov_y, self.aspect, self.z_near, self.z_far);
 
         proj * view
+    }
+
+    pub fn bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+        device.create_bind_group_layout(
+            &wgpu::BindGroupLayoutDescriptor {
+                label: Some("Camera bind group layout"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::VERTEX,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                ],
+            }
+        )
+    }
+
+    pub fn create_bind_group(&self, layout: &wgpu::BindGroupLayout, device: &wgpu::Device) -> wgpu::BindGroup {
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Camera bind group"),
+            layout: &layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: self.buffer.as_entire_binding(),
+                }
+            ],
+        })
     }
 }
 
