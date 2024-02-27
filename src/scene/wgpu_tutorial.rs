@@ -7,6 +7,7 @@ use crate::entity::camera::{Camera, CameraController};
 use crate::mesh::mesh::Mesh;
 use crate::scene::scene::Scene;
 
+#[allow(dead_code)]
 pub struct WgpuTutorial {
     render_pipeline: wgpu::RenderPipeline,
     mesh: Mesh,
@@ -21,11 +22,11 @@ pub struct WgpuTutorial {
 }
 
 const VERTICES: &[Vertex] = &[
-    Vertex { position: [-0.0868241, 0.49240386, 0.0], tex_coords: [0.4131759, 0.00759614] }, // A
-    Vertex { position: [-0.49513406, 0.06958647, 0.0], tex_coords: [0.0048659444, 0.43041354] }, // B
-    Vertex { position: [-0.21918549, -0.44939706, 0.0], tex_coords: [0.28081453, 0.949397] }, // C
-    Vertex { position: [0.35966998, -0.3473291, 0.0], tex_coords: [0.85967, 0.84732914] }, // D
-    Vertex { position: [0.44147372, 0.2347359, 0.0], tex_coords: [0.9414737, 0.2652641] }, // E
+    Vertex { position: glam::Vec3::new(-0.0868241, 0.49240386, 0.0), tex_coords: glam::Vec2::new(0.4131759, 0.00759614) }, // A
+    Vertex { position: glam::Vec3::new(-0.49513406, 0.06958647, 0.0), tex_coords: glam::Vec2::new(0.0048659444, 0.43041354) }, // B
+    Vertex { position: glam::Vec3::new(-0.21918549, -0.44939706, 0.0), tex_coords: glam::Vec2::new(0.28081453, 0.949397) }, // C
+    Vertex { position: glam::Vec3::new(0.35966998, -0.3473291, 0.0), tex_coords: glam::Vec2::new(0.85967, 0.84732914) }, // D
+    Vertex { position: glam::Vec3::new(0.44147372, 0.2347359, 0.0), tex_coords: glam::Vec2::new(0.9414737, 0.2652641) }, // E
 ];
 
 
@@ -70,7 +71,7 @@ impl Scene for WgpuTutorial {
                     x: x as f32,
                     y: 0.0,
                     z: z as f32,
-                };
+                } - INSTANCE_DISPLACEMENT;
 
                 let rotation = if position.is_nan() {
                     // Needed so an object at (0, 0, 0) doesn't get scaled to 0

@@ -42,6 +42,7 @@ impl Mesh {
         }
     }
 
+    #[allow(dead_code)]
     pub fn has_indices(&self) -> bool {
         return self.index_buffer.is_some()
     }

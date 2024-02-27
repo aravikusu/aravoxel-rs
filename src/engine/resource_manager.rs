@@ -37,6 +37,7 @@ impl ResourceManager {
     }
 
     /// Empty the ResourceManager. Generally used if the scene changes.
+    #[allow(dead_code)]
     pub fn clear(&mut self) {
         self.textures.clear();
     }
