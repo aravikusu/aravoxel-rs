@@ -1,18 +1,22 @@
+use winit::dpi::PhysicalSize;
 use winit::event::WindowEvent;
 
+use crate::engine::resource::model::{DrawModel, Model, ModelVertex};
 use crate::engine::resource::texture::Texture;
 use crate::engine::resource_manager::ResourceManager;
-use crate::engine::util::{Instance, InstanceRaw, Vertex};
+use crate::engine::util::{Instance, InstanceRaw, load_model, load_texture, Vertex};
 use crate::entity::camera::{Camera, CameraController};
-use crate::mesh::mesh::Mesh;
 use crate::scene::scene::Scene;
 
 #[allow(dead_code)]
 pub struct WgpuTutorial {
     render_pipeline: wgpu::RenderPipeline,
-    mesh: Mesh,
     diffuse_bind_group: wgpu::BindGroup,
     resource_manager: ResourceManager,
+
+    obj_model: Model,
+
+    depth_texture: Texture,
 
     camera_controller: CameraController,
     camera_bind_group: wgpu::BindGroup,
@@ -21,33 +25,24 @@ pub struct WgpuTutorial {
     instance_buffer: wgpu::Buffer,
 }
 
-const VERTICES: &[Vertex] = &[
-    Vertex { position: glam::Vec3::new(-0.0868241, 0.49240386, 0.0), tex_coords: glam::Vec2::new(0.4131759, 0.00759614) }, // A
-    Vertex { position: glam::Vec3::new(-0.49513406, 0.06958647, 0.0), tex_coords: glam::Vec2::new(0.0048659444, 0.43041354) }, // B
-    Vertex { position: glam::Vec3::new(-0.21918549, -0.44939706, 0.0), tex_coords: glam::Vec2::new(0.28081453, 0.949397) }, // C
-    Vertex { position: glam::Vec3::new(0.35966998, -0.3473291, 0.0), tex_coords: glam::Vec2::new(0.85967, 0.84732914) }, // D
-    Vertex { position: glam::Vec3::new(0.44147372, 0.2347359, 0.0), tex_coords: glam::Vec2::new(0.9414737, 0.2652641) }, // E
-];
-
-
-const INDICES: &[u16] = &[
-    0, 1, 4,
-    1, 2, 4,
-    2, 3, 4,
-];
-
-const NUM_INSTANCS_PER_ROW: u32 = 10;
-const INSTANCE_DISPLACEMENT: glam::Vec3 = glam::Vec3::new(NUM_INSTANCS_PER_ROW as f32 * 0.5, 0.0, NUM_INSTANCS_PER_ROW as f32 * 0.5);
+const NUM_INSTANCES_PER_ROW: u32 = 10;
+const INSTANCE_DISPLACEMENT: glam::Vec3 = glam::Vec3::new(NUM_INSTANCES_PER_ROW as f32 * 0.5, 0.0, NUM_INSTANCES_PER_ROW as f32 * 0.5);
 
 impl Scene for WgpuTutorial {
-    fn new(device: &wgpu::Device, config: &wgpu::SurfaceConfiguration, queue: &wgpu::Queue) -> Box<Self> {
-        let mesh = Mesh::new(VERTICES, INDICES, &device);
-
+    async fn new(
+        device: &wgpu::Device,
+        config:
+        &wgpu::SurfaceConfiguration,
+        queue: &wgpu::Queue,
+    ) -> Box<Self> {
         let mut resource_manager = ResourceManager::new();
-        let diffuse_texture = resource_manager.load_texture(&device, &queue, "happy-tree.png", "happytree".to_string());
-
+        let diffuse_texture = load_texture("happy-tree.png", &device, &queue).await.unwrap();
         let texture_bind_group_layout = Texture::bind_group_layout(&device);
-        let diffuse_bind_group = diffuse_texture.create_bind_group(&texture_bind_group_layout, &device);
+        let diffuse_bind_group = Texture::create_bind_group(&diffuse_texture, &texture_bind_group_layout, &device);
+
+        let depth_texture = Texture::create_depth_texture(&device, &config, "depth_texture");
+
+        let obj_model = load_model("cube.obj", &device, &queue, &texture_bind_group_layout).await.unwrap();
 
         // Camera - more refactor needed
         let camera_controller = CameraController::new(
@@ -65,13 +60,16 @@ impl Scene for WgpuTutorial {
         let camera_bind_group = camera_controller.camera.create_bind_group(&camera_bind_group_layout, &device);
 
         // Instances - iterate through the amount we have, then create a buffer.
-        let instances = (0..NUM_INSTANCS_PER_ROW).flat_map(|z| {
-            (0..NUM_INSTANCS_PER_ROW).map(move |x| {
+        let instances = (0..NUM_INSTANCES_PER_ROW).flat_map(|z| {
+            (0..NUM_INSTANCES_PER_ROW).map(move |x| {
+                let x = 3.0 * (x as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
+                let z = 3.0 * (z as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
+
                 let position = glam::Vec3 {
                     x: x as f32,
                     y: 0.0,
                     z: z as f32,
-                } - INSTANCE_DISPLACEMENT;
+                };
 
                 let rotation = if position.is_nan() {
                     // Needed so an object at (0, 0, 0) doesn't get scaled to 0
@@ -109,7 +107,7 @@ impl Scene for WgpuTutorial {
                     module: &shader,
                     entry_point: "vs_main",
                     buffers: &[
-                        Vertex::desc(),
+                        ModelVertex::desc(),
                         InstanceRaw::desc(),
                     ],
                 },
@@ -134,7 +132,13 @@ impl Scene for WgpuTutorial {
                     // Requires Features::CONSERVATIVE_RASTERIZATION,
                     conservative: false,
                 },
-                depth_stencil: None,
+                depth_stencil: Some(wgpu::DepthStencilState {
+                    format: Texture::DEPTH_FORMAT,
+                    depth_write_enabled: true,
+                    depth_compare: wgpu::CompareFunction::Less,
+                    stencil: wgpu::StencilState::default(),
+                    bias: wgpu::DepthBiasState::default(),
+                }),
                 multisample: wgpu::MultisampleState {
                     count: 1,
                     mask: !0,
@@ -142,15 +146,17 @@ impl Scene for WgpuTutorial {
                 },
                 multiview: None,
             });
+
         Box::from(Self {
             render_pipeline,
-            mesh,
             diffuse_bind_group,
             resource_manager,
             camera_controller,
             camera_bind_group,
             instances,
             instance_buffer,
+            depth_texture,
+            obj_model,
         })
     }
 
@@ -179,19 +185,21 @@ impl Scene for WgpuTutorial {
                     },
                 })
             ],
-            depth_stencil_attachment: None,
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: &self.depth_texture.view,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(1.0),
+                    store: wgpu::StoreOp::Store,
+                }),
+                stencil_ops: None,
+            }),
             occlusion_query_set: None,
             timestamp_writes: None,
         });
 
-        render_pass.set_pipeline(&self.render_pipeline);
-        render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
-        render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
-        render_pass.set_vertex_buffer(0, self.mesh.vertex_buffer.slice(..));
         render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
-        render_pass.set_index_buffer(self.mesh.index_buffer.as_ref().unwrap().slice(..), wgpu::IndexFormat::Uint16);
-
-        render_pass.draw_indexed(0..self.mesh.amount, 0, 0..self.instances.len() as _);
+        render_pass.set_pipeline(&self.render_pipeline);
+        render_pass.draw_model_instanced(&self.obj_model, 0..self.instances.len() as u32, &self.camera_bind_group);
     }
 
     fn input(&mut self, event: &WindowEvent) {
@@ -201,5 +209,9 @@ impl Scene for WgpuTutorial {
             }
             _ => ()
         }
+    }
+
+    fn resize(&mut self, _new_size: PhysicalSize<u32>, device: &wgpu::Device, config: &wgpu::SurfaceConfiguration) {
+        self.depth_texture = Texture::create_depth_texture(&device, &config, "depth_texture");
     }
 }

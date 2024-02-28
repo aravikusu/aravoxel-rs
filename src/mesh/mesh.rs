@@ -1,18 +1,18 @@
 use wgpu::util::DeviceExt;
 
-use crate::engine::util::Vertex;
+use crate::engine::util::MeshVertex;
 
-/// A struct that is part of every Mesh.
-/// It contains the vertex buffer, and if applicable,
-/// the index buffer.
+/// A mesh made out of vertices and indicies.
+/// Can be used on its own or incorporate it into other meshes.
 pub struct Mesh {
     pub vertex_buffer: wgpu::Buffer,
     pub index_buffer: Option<wgpu::Buffer>,
     pub amount: u32,
 }
 
+#[allow(dead_code)]
 impl Mesh {
-    pub fn new(vertices: &[Vertex], indices: &[u16], device: &wgpu::Device) -> Self {
+    pub fn new(vertices: &[MeshVertex], indices: &[u16], device: &wgpu::Device) -> Self {
         let has_indices = !indices.is_empty();
 
         let vertex_buffer = device.create_buffer_init(
@@ -42,8 +42,7 @@ impl Mesh {
         }
     }
 
-    #[allow(dead_code)]
     pub fn has_indices(&self) -> bool {
-        return self.index_buffer.is_some()
+        return self.index_buffer.is_some();
     }
 }

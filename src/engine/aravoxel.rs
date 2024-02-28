@@ -67,7 +67,7 @@ impl Aravoxel<'_> {
         };
         surface.configure(&device, &config);
 
-        let scene = WgpuTutorial::new(&device, &config, &queue);
+        let scene = WgpuTutorial::new(&device, &config, &queue).await;
         Self {
             window,
             surface,
@@ -91,6 +91,9 @@ impl Aravoxel<'_> {
             self.config.width = new_size.width;
             self.config.height = new_size.height;
             self.surface.configure(&self.device, &self.config);
+
+            // There might be surfaces in the scene that must be updated as well
+            self.scene.resize(new_size, &self.device, &self.config);
         }
     }
 

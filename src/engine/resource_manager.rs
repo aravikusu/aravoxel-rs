@@ -17,12 +17,18 @@ impl ResourceManager {
 
     /// Load a texture and store it in the ResourceManager.
     /// Also returns a reference to said texture.
-    pub fn load_texture(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, file: &str, name: String) -> &Texture {
-        let texture = Texture::new(&device, &queue, file).unwrap();
+    pub fn load_texture(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        file: &str,
+        name: String
+    ) {
+        //let texture = Texture::new(&device, &queue, file).unwrap();
 
-        self.textures.insert(name.clone(), texture);
+        //self.textures.insert(name.clone(), texture);
 
-        return self.get_texture(&name).unwrap()
+        //self.get_texture(&name).unwrap()
     }
 
     /// Get a texture by name.
