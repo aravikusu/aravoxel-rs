@@ -4,16 +4,15 @@ use crate::engine::resource::instance::{Instance, InstanceRaw};
 
 use crate::engine::resource::model::{DrawModel, Model, ModelVertex};
 use crate::engine::resource::texture::Texture;
-use crate::engine::resource_manager::ResourceManager;
-use crate::engine::util::{load_model, load_texture, Vertex};
+use crate::engine::util::{load_model, Vertex};
 use crate::entity::camera::{Camera, CameraController};
 use crate::scene::scene::Scene;
 
 #[allow(dead_code)]
 pub struct WgpuTutorial {
     render_pipeline: wgpu::RenderPipeline,
-    diffuse_bind_group: wgpu::BindGroup,
-    resource_manager: ResourceManager,
+    
+    depth_texture: Texture,
 
     obj_model: Model,
 
@@ -33,11 +32,9 @@ impl Scene for WgpuTutorial {
         &wgpu::SurfaceConfiguration,
         queue: &wgpu::Queue,
     ) -> Box<Self> {
-        let mut resource_manager = ResourceManager::new(device, config);
-        let diffuse_texture = load_texture("happy-tree.png", device, queue).await.unwrap();
+        let depth_texture = Texture::create_depth_texture(device, config);
         let texture_bind_group_layout = Texture::bind_group_layout(device);
-        let diffuse_bind_group = Texture::create_bind_group(&diffuse_texture, &texture_bind_group_layout, device);
-
+        
         let obj_model = load_model("cube.obj", device, queue, &texture_bind_group_layout).await.unwrap();
 
         // Camera - more refactor needed
@@ -145,13 +142,12 @@ impl Scene for WgpuTutorial {
 
         Box::from(Self {
             render_pipeline,
-            diffuse_bind_group,
-            resource_manager,
             camera_controller,
-            camera_bind_group,
             instances,
             instance_buffer,
             obj_model,
+            depth_texture,
+            camera_bind_group,
         })
     }
 
@@ -181,7 +177,7 @@ impl Scene for WgpuTutorial {
                 })
             ],
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                view: &self.resource_manager.depth_texture.view,
+                view: &self.depth_texture.view,
                 depth_ops: Some(wgpu::Operations {
                     load: wgpu::LoadOp::Clear(1.0),
                     store: wgpu::StoreOp::Store,
@@ -207,6 +203,6 @@ impl Scene for WgpuTutorial {
     }
 
     fn resize(&mut self, _new_size: PhysicalSize<u32>, device: &wgpu::Device, config: &wgpu::SurfaceConfiguration) {
-        self.resource_manager.recreate_depth_texture(device, config)
+        self.depth_texture = Texture::create_depth_texture(device, config);
     }
 }
