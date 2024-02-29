@@ -7,15 +7,12 @@ pub struct Texture {
     pub sampler: wgpu::Sampler,
 }
 
-const TEXTURE_FOLDER_PATH: &str = "assets/";
-
 impl Texture {
     pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
     pub fn create_depth_texture(
         device: &wgpu::Device,
         config: &wgpu::SurfaceConfiguration,
-        label: &str
     ) -> Self {
         let size = wgpu::Extent3d {
             width: config.width,
@@ -24,7 +21,7 @@ impl Texture {
         };
 
         let desc = wgpu::TextureDescriptor {
-            label: Some(label),
+            label: Some("depth_texture"),
             size,
             mip_level_count: 1,
             sample_count: 1,
@@ -52,7 +49,7 @@ impl Texture {
             }
         );
 
-        Self { texture, view, sampler, label: label.to_string() }
+        Self { texture, view, sampler, label: "depth_texture".to_string() }
     }
 
     pub fn create(
@@ -122,7 +119,7 @@ impl Texture {
         device.create_bind_group(
             &wgpu::BindGroupDescriptor {
                 label: Some(format!("{} Bind Group", texture.label).as_str()),
-                layout: &layout,
+                layout,
                 entries: &[
                     wgpu::BindGroupEntry {
                         binding: 0,

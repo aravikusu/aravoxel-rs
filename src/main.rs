@@ -1,7 +1,6 @@
 
 mod engine;
 mod scene;
-mod mesh;
 mod entity;
 
 fn main() {

@@ -19,19 +19,19 @@ pub struct ModelVertex {
 
 impl ModelVertex {
     /// Create a Vertex Buffer out of a ModelVertex vector.
-    pub fn create_vertex_buffer(file_name: &str, vertices: &Vec<ModelVertex>, device: &wgpu::Device) -> wgpu::Buffer {
+    pub fn create_vertex_buffer(file_name: &str, vertices: &[ModelVertex], device: &wgpu::Device) -> wgpu::Buffer {
         device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some(&format!("{file_name} Vertex Buffer")),
-            contents: bytemuck::cast_slice(&vertices),
+            contents: bytemuck::cast_slice(vertices),
             usage: wgpu::BufferUsages::VERTEX,
         })
     }
 
     /// Create a Index Buffer out of a vector of indices.
-    pub fn create_index_buffer(file_name: &str, indices: &Vec<u32>, device: &wgpu::Device) -> wgpu::Buffer {
+    pub fn create_index_buffer(file_name: &str, indices: &[u32], device: &wgpu::Device) -> wgpu::Buffer {
         device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some(&format!("{file_name} Index Buffer")),
-            contents: bytemuck::cast_slice(&indices),
+            contents: bytemuck::cast_slice(indices),
             usage: wgpu::BufferUsages::INDEX,
         })
     }

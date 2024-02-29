@@ -50,9 +50,7 @@ impl Aravoxel<'_> {
         // Now to set up the surface itself.
         let surface_caps = surface.get_capabilities(&adapter);
         let surface_format = surface_caps.formats.iter()
-            .copied()
-            .filter(|f| f.is_srgb())
-            .next()
+            .copied().find(|f| f.is_srgb())
             .unwrap_or(surface_caps.formats[0]);
 
         let config = wgpu::SurfaceConfiguration {
@@ -99,7 +97,7 @@ impl Aravoxel<'_> {
 
     //TODO: Refactor this and make use of whatever scene's own input function
     fn input(&mut self, event: &WindowEvent) {
-        self.scene.input(&event);
+        self.scene.input(event);
     }
 
     fn update(&mut self) {

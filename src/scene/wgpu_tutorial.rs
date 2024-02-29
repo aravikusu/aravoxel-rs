@@ -1,10 +1,11 @@
 use winit::dpi::PhysicalSize;
 use winit::event::WindowEvent;
+use crate::engine::resource::instance::{Instance, InstanceRaw};
 
 use crate::engine::resource::model::{DrawModel, Model, ModelVertex};
 use crate::engine::resource::texture::Texture;
 use crate::engine::resource_manager::ResourceManager;
-use crate::engine::util::{Instance, InstanceRaw, load_model, load_texture, Vertex};
+use crate::engine::util::{load_model, load_texture, Vertex};
 use crate::entity::camera::{Camera, CameraController};
 use crate::scene::scene::Scene;
 
@@ -16,8 +17,6 @@ pub struct WgpuTutorial {
 
     obj_model: Model,
 
-    depth_texture: Texture,
-
     camera_controller: CameraController,
     camera_bind_group: wgpu::BindGroup,
 
@@ -26,7 +25,6 @@ pub struct WgpuTutorial {
 }
 
 const NUM_INSTANCES_PER_ROW: u32 = 10;
-const INSTANCE_DISPLACEMENT: glam::Vec3 = glam::Vec3::new(NUM_INSTANCES_PER_ROW as f32 * 0.5, 0.0, NUM_INSTANCES_PER_ROW as f32 * 0.5);
 
 impl Scene for WgpuTutorial {
     async fn new(
@@ -35,14 +33,12 @@ impl Scene for WgpuTutorial {
         &wgpu::SurfaceConfiguration,
         queue: &wgpu::Queue,
     ) -> Box<Self> {
-        let mut resource_manager = ResourceManager::new();
-        let diffuse_texture = load_texture("happy-tree.png", &device, &queue).await.unwrap();
-        let texture_bind_group_layout = Texture::bind_group_layout(&device);
-        let diffuse_bind_group = Texture::create_bind_group(&diffuse_texture, &texture_bind_group_layout, &device);
+        let mut resource_manager = ResourceManager::new(device, config);
+        let diffuse_texture = load_texture("happy-tree.png", device, queue).await.unwrap();
+        let texture_bind_group_layout = Texture::bind_group_layout(device);
+        let diffuse_bind_group = Texture::create_bind_group(&diffuse_texture, &texture_bind_group_layout, device);
 
-        let depth_texture = Texture::create_depth_texture(&device, &config, "depth_texture");
-
-        let obj_model = load_model("cube.obj", &device, &queue, &texture_bind_group_layout).await.unwrap();
+        let obj_model = load_model("cube.obj", device, queue, &texture_bind_group_layout).await.unwrap();
 
         // Camera - more refactor needed
         let camera_controller = CameraController::new(
@@ -54,10 +50,10 @@ impl Scene for WgpuTutorial {
             45.0,
             0.1,
             100.0,
-            &device,
+            device,
         );
-        let camera_bind_group_layout = Camera::bind_group_layout(&device);
-        let camera_bind_group = camera_controller.camera.create_bind_group(&camera_bind_group_layout, &device);
+        let camera_bind_group_layout = Camera::bind_group_layout(device);
+        let camera_bind_group = camera_controller.camera.create_bind_group(&camera_bind_group_layout, device);
 
         // Instances - iterate through the amount we have, then create a buffer.
         let instances = (0..NUM_INSTANCES_PER_ROW).flat_map(|z| {
@@ -66,9 +62,9 @@ impl Scene for WgpuTutorial {
                 let z = 3.0 * (z as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
 
                 let position = glam::Vec3 {
-                    x: x as f32,
+                    x,
                     y: 0.0,
-                    z: z as f32,
+                    z,
                 };
 
                 let rotation = if position.is_nan() {
@@ -82,7 +78,7 @@ impl Scene for WgpuTutorial {
                 Instance { position, rotation }
             })
         }).collect::<Vec<_>>();
-        let instance_buffer = InstanceRaw::create_buffer(&instances, &device);
+        let instance_buffer = InstanceRaw::create_buffer(&instances, device);
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("WgpuTutorial Shader"),
@@ -155,7 +151,6 @@ impl Scene for WgpuTutorial {
             camera_bind_group,
             instances,
             instance_buffer,
-            depth_texture,
             obj_model,
         })
     }
@@ -186,7 +181,7 @@ impl Scene for WgpuTutorial {
                 })
             ],
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                view: &self.depth_texture.view,
+                view: &self.resource_manager.depth_texture.view,
                 depth_ops: Some(wgpu::Operations {
                     load: wgpu::LoadOp::Clear(1.0),
                     store: wgpu::StoreOp::Store,
@@ -205,13 +200,13 @@ impl Scene for WgpuTutorial {
     fn input(&mut self, event: &WindowEvent) {
         match event {
             WindowEvent::KeyboardInput { event, .. } => {
-                self.camera_controller.keyboard_input(&event);
+                self.camera_controller.keyboard_input(event);
             }
             _ => ()
         }
     }
 
     fn resize(&mut self, _new_size: PhysicalSize<u32>, device: &wgpu::Device, config: &wgpu::SurfaceConfiguration) {
-        self.depth_texture = Texture::create_depth_texture(&device, &config, "depth_texture");
+        self.resource_manager.recreate_depth_texture(device, config)
     }
 }

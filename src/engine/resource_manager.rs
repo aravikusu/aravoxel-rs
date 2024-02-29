@@ -1,50 +1,42 @@
 use std::collections::HashMap;
 use log::error;
+
+use crate::engine::resource::model::Model;
 use crate::engine::resource::texture::Texture;
 
-/// The ResourceManager stores all of a scene loaded textures and shaders,
-/// as well as giving you an easy way to access them.
+/// The ResourceManager stores all of a scene's loaded things.
+/// Such as models, shaders, bindgroups.
 pub struct ResourceManager {
-    textures: HashMap<String, Texture>,
+    models: HashMap<String, Model>,
+    bind_group_layouts: HashMap<String, wgpu::BindGroupLayout>,
+    
+    /// The depth_texture is stored here seperately
+    /// since it's more or less always used.
+    pub depth_texture: Texture,
 }
 
 impl ResourceManager {
-    pub fn new() -> Self {
+    pub fn new(device: &wgpu::Device, config: &wgpu::SurfaceConfiguration) -> Self {
         Self {
-            textures: HashMap::new(),
+            models: HashMap::new(),
+            bind_group_layouts: HashMap::new(),
+            depth_texture: Texture::create_depth_texture(device, config)
         }
     }
-
-    /// Load a texture and store it in the ResourceManager.
-    /// Also returns a reference to said texture.
-    pub fn load_texture(
-        &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        file: &str,
-        name: String
-    ) {
-        //let texture = Texture::new(&device, &queue, file).unwrap();
-
-        //self.textures.insert(name.clone(), texture);
-
-        //self.get_texture(&name).unwrap()
+    
+    pub fn store_layout(&mut self, layout: wgpu::BindGroupLayout, name: String) {
+        self.bind_group_layouts.insert(name, layout);
     }
 
     /// Get a texture by name.
-    pub fn get_texture(&mut self, name: &str) -> Option<&Texture> {
-        let texture = self.textures.get(name);
-        match texture {
-            None => error!("ResourceManager: There is no texture with the name {}", name),
-            _ => ()
-        };
+    pub fn get_texture(&mut self, name: &str) -> Option<&Model> {
+        let texture = self.models.get(name);
+        if texture.is_none() { error!("ResourceManager: There is no texture with the name {}", name) };
 
         texture
     }
-
-    /// Empty the ResourceManager. Generally used if the scene changes.
-    #[allow(dead_code)]
-    pub fn clear(&mut self) {
-        self.textures.clear();
+    
+    pub fn recreate_depth_texture(&mut self, device: &wgpu::Device, config: &wgpu::SurfaceConfiguration) {
+        self.depth_texture = Texture::create_depth_texture(device, config);
     }
 }
