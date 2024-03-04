@@ -1,5 +1,6 @@
 use winit::dpi::PhysicalSize;
 use winit::event::WindowEvent;
+use crate::engine::assets::Assets;
 use crate::engine::resource::instance::{Instance, InstanceRaw};
 
 use crate::engine::resource::model::{DrawModel, Model, ModelVertex};
@@ -10,9 +11,8 @@ use crate::scene::scene::Scene;
 
 #[allow(dead_code)]
 pub struct WgpuTutorial {
+    assets: Assets,
     render_pipeline: wgpu::RenderPipeline,
-    
-    depth_texture: Texture,
 
     obj_model: Model,
 
@@ -32,7 +32,7 @@ impl Scene for WgpuTutorial {
         &wgpu::SurfaceConfiguration,
         queue: &wgpu::Queue,
     ) -> Box<Self> {
-        let depth_texture = Texture::create_depth_texture(device, config);
+        let assets = Assets::new(device, config).await;
         let texture_bind_group_layout = Texture::bind_group_layout(device);
         
         let obj_model = load_model("cube.obj", device, queue, &texture_bind_group_layout).await.unwrap();
@@ -77,11 +77,6 @@ impl Scene for WgpuTutorial {
         }).collect::<Vec<_>>();
         let instance_buffer = InstanceRaw::create_buffer(&instances, device);
 
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("WgpuTutorial Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/shader.wgsl").into()),
-        });
-
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("WgpuTutorial Pipeline Layout"),
@@ -97,7 +92,7 @@ impl Scene for WgpuTutorial {
                 label: Some("WgpuTutorial Render Pipeline"),
                 layout: Some(&render_pipeline_layout),
                 vertex: wgpu::VertexState {
-                    module: &shader,
+                    module: &assets.color_shader,
                     entry_point: "vs_main",
                     buffers: &[
                         ModelVertex::desc(),
@@ -105,7 +100,7 @@ impl Scene for WgpuTutorial {
                     ],
                 },
                 fragment: Some(wgpu::FragmentState {
-                    module: &shader,
+                    module: &assets.color_shader,
                     entry_point: "fs_main",
                     targets: &[Some(wgpu::ColorTargetState {
                         format: config.format,
@@ -139,15 +134,14 @@ impl Scene for WgpuTutorial {
                 },
                 multiview: None,
             });
-
         Box::from(Self {
             render_pipeline,
             camera_controller,
             instances,
             instance_buffer,
             obj_model,
-            depth_texture,
             camera_bind_group,
+            assets
         })
     }
 
@@ -177,7 +171,7 @@ impl Scene for WgpuTutorial {
                 })
             ],
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                view: &self.depth_texture.view,
+                view: &self.assets.depth_texture.view,
                 depth_ops: Some(wgpu::Operations {
                     load: wgpu::LoadOp::Clear(1.0),
                     store: wgpu::StoreOp::Store,
@@ -203,6 +197,6 @@ impl Scene for WgpuTutorial {
     }
 
     fn resize(&mut self, _new_size: PhysicalSize<u32>, device: &wgpu::Device, config: &wgpu::SurfaceConfiguration) {
-        self.depth_texture = Texture::create_depth_texture(device, config);
+        self.assets.depth_texture = Texture::create_depth_texture(device, config);
     }
 }

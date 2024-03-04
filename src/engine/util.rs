@@ -108,3 +108,12 @@ pub async fn load_model(
 
     Ok(Model { meshes, materials })
 }
+
+pub async fn create_shader_module(device: &wgpu::Device, shader_file: &str, label: &str) -> wgpu::ShaderModule {
+    let file = load_string(format!("shaders/{shader_file}").as_str()).await.unwrap();
+    
+    device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some(label),
+        source: wgpu::ShaderSource::Wgsl(file.into())
+    })
+}

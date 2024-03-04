@@ -131,7 +131,11 @@ impl Aravoxel<'_> {
 /// The only public function. Initializes the window and starts the loop.
 pub async fn run() {
     let event_loop = EventLoop::new().unwrap();
-    let window = Arc::new(WindowBuilder::new().build(&event_loop).unwrap());
+    let window = Arc::new(WindowBuilder::new()
+        .with_resizable(false)
+        .with_title("aravoxel")
+        .build(&event_loop)
+        .unwrap());
 
     let mut aravoxel = Aravoxel::new(window).await;
 
