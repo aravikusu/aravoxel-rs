@@ -1,11 +1,12 @@
-use winit::dpi::PhysicalSize;
-use winit::event::WindowEvent;
 use crate::engine::assets::Assets;
 use crate::engine::resource::instance::{Instance, InstanceRaw};
+use crate::engine::resource::light::Light;
+use winit::dpi::PhysicalSize;
+use winit::event::WindowEvent;
 
-use crate::engine::resource::model::{DrawModel, Model, ModelVertex};
+use crate::engine::resource::model::{DrawLight, DrawModel, Model, ModelVertex};
 use crate::engine::resource::texture::Texture;
-use crate::engine::util::{load_model, Vertex};
+use crate::engine::util::{create_render_pipeline, load_model, Vertex};
 use crate::entity::camera::{Camera, CameraController};
 use crate::scene::scene::Scene;
 
@@ -13,6 +14,7 @@ use crate::scene::scene::Scene;
 pub struct WgpuTutorial {
     assets: Assets,
     render_pipeline: wgpu::RenderPipeline,
+    light_render_pipeline: wgpu::RenderPipeline,
 
     obj_model: Model,
 
@@ -21,6 +23,9 @@ pub struct WgpuTutorial {
 
     instances: Vec<Instance>,
     instance_buffer: wgpu::Buffer,
+
+    light: Light,
+    light_bind_group: wgpu::BindGroup,
 }
 
 const NUM_INSTANCES_PER_ROW: u32 = 10;
@@ -28,16 +33,17 @@ const NUM_INSTANCES_PER_ROW: u32 = 10;
 impl Scene for WgpuTutorial {
     async fn new(
         device: &wgpu::Device,
-        config:
-        &wgpu::SurfaceConfiguration,
+        config: &wgpu::SurfaceConfiguration,
         queue: &wgpu::Queue,
     ) -> Box<Self> {
         let assets = Assets::new(device, config).await;
         let texture_bind_group_layout = Texture::bind_group_layout(device);
-        
-        let obj_model = load_model("cube.obj", device, queue, &texture_bind_group_layout).await.unwrap();
 
-        // Camera - more refactor needed
+        let obj_model = load_model("cube.obj", device, queue, &texture_bind_group_layout)
+            .await
+            .unwrap();
+
+        // Camera
         let camera_controller = CameraController::new(
             0.2,
             (0.0, 1.0, 2.0).into(),
@@ -50,105 +56,121 @@ impl Scene for WgpuTutorial {
             device,
         );
         let camera_bind_group_layout = Camera::bind_group_layout(device);
-        let camera_bind_group = camera_controller.camera.create_bind_group(&camera_bind_group_layout, device);
+        let camera_bind_group = camera_controller
+            .camera
+            .create_bind_group(&camera_bind_group_layout, device);
 
         // Instances - iterate through the amount we have, then create a buffer.
-        let instances = (0..NUM_INSTANCES_PER_ROW).flat_map(|z| {
-            (0..NUM_INSTANCES_PER_ROW).map(move |x| {
-                let x = 3.0 * (x as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
-                let z = 3.0 * (z as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
+        let instances = (0..NUM_INSTANCES_PER_ROW)
+            .flat_map(|z| {
+                (0..NUM_INSTANCES_PER_ROW).map(move |x| {
+                    let x = 3.0 * (x as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
+                    let z = 3.0 * (z as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
 
-                let position = glam::Vec3 {
-                    x,
-                    y: 0.0,
-                    z,
-                };
+                    let position = glam::Vec3 { x, y: 0.0, z };
 
-                let rotation = if position.is_nan() {
-                    // Needed so an object at (0, 0, 0) doesn't get scaled to 0
-                    // since Quaternions can effect scale if they're not "correct"
-                    glam::Quat::from_axis_angle(glam::Vec3::Z, 0.0)
-                } else {
-                    glam::Quat::from_axis_angle(position.normalize(), 45.0)
-                };
+                    let rotation = if position.is_nan() {
+                        // Needed so an object at (0, 0, 0) doesn't get scaled to 0
+                        // since Quaternions can effect scale if they're not "correct"
+                        glam::Quat::from_axis_angle(glam::Vec3::Z, 0.0)
+                    } else {
+                        glam::Quat::from_axis_angle(position.normalize(), 45.0)
+                    };
 
-                Instance { position, rotation }
+                    Instance { position, rotation }
+                })
             })
-        }).collect::<Vec<_>>();
+            .collect::<Vec<_>>();
         let instance_buffer = InstanceRaw::create_buffer(&instances, device);
 
-        let render_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("WgpuTutorial Pipeline Layout"),
-                bind_group_layouts: &[
-                    &texture_bind_group_layout,
-                    &camera_bind_group_layout
-                ],
-                push_constant_ranges: &[],
-            });
+        let light = Light::new(
+            glam::Vec3::new(2.0, 2.0, 2.0),
+            glam::Vec3::new(1.0, 1.0, 1.0),
+            device,
+        );
+        let light_bind_group_layout = Light::bind_group_layout(device);
+        let light_bind_group = light.create_bind_group(&light_bind_group_layout, device);
 
-        let render_pipeline =
-            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some("WgpuTutorial Render Pipeline"),
-                layout: Some(&render_pipeline_layout),
-                vertex: wgpu::VertexState {
-                    module: &assets.color_shader,
-                    entry_point: "vs_main",
-                    buffers: &[
-                        ModelVertex::desc(),
-                        InstanceRaw::desc(),
+        let render_pipeline = {
+            let render_pipeline_layout =
+                device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                    label: Some("WgpuTutorial Pipeline Layout"),
+                    bind_group_layouts: &[
+                        &texture_bind_group_layout,
+                        &camera_bind_group_layout,
+                        &light_bind_group_layout,
                     ],
-                },
-                fragment: Some(wgpu::FragmentState {
-                    module: &assets.color_shader,
-                    entry_point: "fs_main",
-                    targets: &[Some(wgpu::ColorTargetState {
-                        format: config.format,
-                        blend: Some(wgpu::BlendState::REPLACE),
-                        write_mask: wgpu::ColorWrites::ALL,
-                    })],
-                }),
-                primitive: wgpu::PrimitiveState {
-                    topology: wgpu::PrimitiveTopology::TriangleList,
-                    strip_index_format: None,
-                    front_face: wgpu::FrontFace::Ccw,
-                    cull_mode: Some(wgpu::Face::Back),
-                    // Setting this to another other than FIll requires Features::NON_FILL_POLYGON_MODE
-                    polygon_mode: wgpu::PolygonMode::Fill,
-                    // Requires Features::DEPTH_CLIP_CONTROL,
-                    unclipped_depth: false,
-                    // Requires Features::CONSERVATIVE_RASTERIZATION,
-                    conservative: false,
-                },
-                depth_stencil: Some(wgpu::DepthStencilState {
-                    format: Texture::DEPTH_FORMAT,
-                    depth_write_enabled: true,
-                    depth_compare: wgpu::CompareFunction::Less,
-                    stencil: wgpu::StencilState::default(),
-                    bias: wgpu::DepthBiasState::default(),
-                }),
-                multisample: wgpu::MultisampleState {
-                    count: 1,
-                    mask: !0,
-                    alpha_to_coverage_enabled: false,
-                },
-                multiview: None,
-            });
+                    push_constant_ranges: &[],
+                });
+
+            create_render_pipeline(
+                device,
+                &render_pipeline_layout,
+                config.format,
+                Some(Texture::DEPTH_FORMAT),
+                &[ModelVertex::desc(), InstanceRaw::desc()],
+                &assets.color_shader,
+                Some("Color Render Pipeline"),
+            )
+        };
+
+        let light_render_pipeline = {
+            let light_pipeline_layout =
+                device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                    label: Some("Light Pipeline Layout"),
+                    bind_group_layouts: &[
+                        &camera_bind_group_layout,
+                        &light_bind_group_layout,
+                    ],
+                    push_constant_ranges: &[],
+                });
+
+            create_render_pipeline(
+                device,
+                &light_pipeline_layout,
+                config.format,
+                Some(Texture::DEPTH_FORMAT),
+                &[ModelVertex::desc()],
+                &assets.light_shader,
+                Some("Light Render Pipeline"),
+            )
+        };
+
         Box::from(Self {
             render_pipeline,
+            light_render_pipeline,
             camera_controller,
             instances,
             instance_buffer,
             obj_model,
             camera_bind_group,
-            assets
+            light_bind_group,
+            assets,
+            light,
         })
     }
 
     fn update(&mut self, queue: &wgpu::Queue) {
         self.camera_controller.update_camera();
-        self.camera_controller.camera_uniform.update_view_proj(&self.camera_controller.camera);
-        queue.write_buffer(&self.camera_controller.camera.buffer, 0, bytemuck::cast_slice(&[self.camera_controller.camera_uniform]))
+        self.camera_controller
+            .camera_uniform
+            .update_view_proj(&self.camera_controller.camera);
+        queue.write_buffer(
+            &self.camera_controller.camera.buffer,
+            0,
+            bytemuck::cast_slice(&[self.camera_controller.camera_uniform]),
+        );
+
+        // Update light position
+        self.light.light_uniform.position =
+            glam::Quat::from_axis_angle(glam::Vec3::new(0.0, 1.0, 0.0), 0.01)
+                * self.light.light_uniform.position;
+
+        queue.write_buffer(
+            &self.light.buffer,
+            0,
+            bytemuck::cast_slice(&[self.light.light_uniform]),
+        );
     }
 
     fn render(&mut self, view: &wgpu::TextureView, encoder: &mut wgpu::CommandEncoder) {
@@ -168,7 +190,7 @@ impl Scene for WgpuTutorial {
                         }),
                         store: wgpu::StoreOp::Store,
                     },
-                })
+                }),
             ],
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                 view: &self.assets.depth_texture.view,
@@ -183,8 +205,21 @@ impl Scene for WgpuTutorial {
         });
 
         render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
+
+        render_pass.set_pipeline(&self.light_render_pipeline);
+        render_pass.draw_light_model(
+            &self.obj_model,
+            &self.camera_bind_group,
+            &self.light_bind_group,
+        );
+
         render_pass.set_pipeline(&self.render_pipeline);
-        render_pass.draw_model_instanced(&self.obj_model, 0..self.instances.len() as u32, &self.camera_bind_group);
+        render_pass.draw_model_instanced(
+            &self.obj_model,
+            0..self.instances.len() as u32,
+            &self.camera_bind_group,
+            &self.light_bind_group,
+        );
     }
 
     fn input(&mut self, event: &WindowEvent) {
@@ -192,11 +227,16 @@ impl Scene for WgpuTutorial {
             WindowEvent::KeyboardInput { event, .. } => {
                 self.camera_controller.keyboard_input(event);
             }
-            _ => ()
+            _ => (),
         }
     }
 
-    fn resize(&mut self, _new_size: PhysicalSize<u32>, device: &wgpu::Device, config: &wgpu::SurfaceConfiguration) {
+    fn resize(
+        &mut self,
+        _new_size: PhysicalSize<u32>,
+        device: &wgpu::Device,
+        config: &wgpu::SurfaceConfiguration,
+    ) {
         self.assets.depth_texture = Texture::create_depth_texture(device, config);
     }
 }

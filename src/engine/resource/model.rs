@@ -19,7 +19,11 @@ pub struct ModelVertex {
 
 impl ModelVertex {
     /// Create a Vertex Buffer out of a ModelVertex vector.
-    pub fn create_vertex_buffer(file_name: &str, vertices: &[ModelVertex], device: &wgpu::Device) -> wgpu::Buffer {
+    pub fn create_vertex_buffer(
+        file_name: &str,
+        vertices: &[ModelVertex],
+        device: &wgpu::Device,
+    ) -> wgpu::Buffer {
         device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some(&format!("{file_name} Vertex Buffer")),
             contents: bytemuck::cast_slice(vertices),
@@ -28,7 +32,11 @@ impl ModelVertex {
     }
 
     /// Create a Index Buffer out of a vector of indices.
-    pub fn create_index_buffer(file_name: &str, indices: &[u32], device: &wgpu::Device) -> wgpu::Buffer {
+    pub fn create_index_buffer(
+        file_name: &str,
+        indices: &[u32],
+        device: &wgpu::Device,
+    ) -> wgpu::Buffer {
         device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some(&format!("{file_name} Index Buffer")),
             contents: bytemuck::cast_slice(indices),
@@ -110,6 +118,7 @@ pub trait DrawModel<'a> {
         mesh: &'a Mesh,
         material: &'a Material,
         camera_bind_group: &'a wgpu::BindGroup,
+        light_bind_group: &'a wgpu::BindGroup,
     );
 
     /// Uses the supplied Mesh and Material and draws the amount of instances specified.
@@ -119,10 +128,16 @@ pub trait DrawModel<'a> {
         material: &'a Material,
         instances: Range<u32>,
         camera_bind_group: &'a wgpu::BindGroup,
+        light_bind_group: &'a wgpu::BindGroup,
     );
 
     // Takes a Model and draws it. It specifies a single instance.
-    fn draw_model(&mut self, model: &'a Model, camera_bind_group: &'a wgpu::BindGroup);
+    fn draw_model(
+        &mut self,
+        model: &'a Model,
+        camera_bind_group: &'a wgpu::BindGroup,
+        light_bind_group: &'a wgpu::BindGroup,
+    );
 
     /// Uses a Model and draws the amount of specified instances.
     /// Uses `draw_mesh_instanced` in a loop.
@@ -131,19 +146,22 @@ pub trait DrawModel<'a> {
         model: &'a Model,
         instances: Range<u32>,
         camera_bind_group: &'a wgpu::BindGroup,
+        light_bind_group: &'a wgpu::BindGroup,
     );
 }
 
 impl<'a, 'b> DrawModel<'b> for wgpu::RenderPass<'a>
-    where 'b: 'a,
+where
+    'b: 'a,
 {
     fn draw_mesh(
         &mut self,
         mesh: &'b Mesh,
         material: &'a Material,
         camera_bind_group: &'a wgpu::BindGroup,
+        light_bind_group: &'a wgpu::BindGroup,
     ) {
-        self.draw_mesh_instanced(mesh, material, 0..1, camera_bind_group);
+        self.draw_mesh_instanced(mesh, material, 0..1, camera_bind_group, light_bind_group);
     }
 
     fn draw_mesh_instanced(
@@ -152,16 +170,23 @@ impl<'a, 'b> DrawModel<'b> for wgpu::RenderPass<'a>
         material: &'a Material,
         instances: Range<u32>,
         camera_bind_group: &'a wgpu::BindGroup,
+        light_bind_group: &'a wgpu::BindGroup,
     ) {
         self.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
         self.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
         self.set_bind_group(0, &material.bind_group, &[]);
         self.set_bind_group(1, camera_bind_group, &[]);
+        self.set_bind_group(2, light_bind_group, &[]);
         self.draw_indexed(0..mesh.num_elements, 0, instances);
     }
 
-    fn draw_model(&mut self, model: &'b Model, camera_bind_group: &'b wgpu::BindGroup) {
-        self.draw_model_instanced(model, 0..1, camera_bind_group);
+    fn draw_model(
+        &mut self,
+        model: &'b Model,
+        camera_bind_group: &'b wgpu::BindGroup,
+        light_bind_group: &'a wgpu::BindGroup,
+    ) {
+        self.draw_model_instanced(model, 0..1, camera_bind_group, light_bind_group);
     }
 
     fn draw_model_instanced(
@@ -169,10 +194,107 @@ impl<'a, 'b> DrawModel<'b> for wgpu::RenderPass<'a>
         model: &'b Model,
         instances: Range<u32>,
         camera_bind_group: &'b wgpu::BindGroup,
+        light_bind_group: &'a wgpu::BindGroup,
     ) {
         for mesh in &model.meshes {
             let material = &model.materials[mesh.material];
-            self.draw_mesh_instanced(mesh, material, instances.clone(), camera_bind_group);
+            self.draw_mesh_instanced(
+                mesh,
+                material,
+                instances.clone(),
+                camera_bind_group,
+                light_bind_group,
+            );
+        }
+    }
+}
+
+/// DrawLight is similar to DrawModel.
+/// But since the our Light BindGroup doesn't
+/// deal with any textures, they are omitted.
+pub trait DrawLight<'a> {
+    /// Takes a single Mesh and Material and draws it.
+    /// It calls `draw_mesh_instanced` but specifying a single instance.
+    fn draw_light_mesh(
+        &mut self,
+        mesh: &'a Mesh,
+        camera_bind_group: &'a wgpu::BindGroup,
+        light_bind_group: &'a wgpu::BindGroup,
+    );
+
+    /// Uses the supplied Mesh and Material and draws the amount of instances specified.
+    fn draw_light_mesh_instanced(
+        &mut self,
+        mesh: &'a Mesh,
+        instances: Range<u32>,
+        camera_bind_group: &'a wgpu::BindGroup,
+        light_bind_group: &'a wgpu::BindGroup,
+    );
+
+    // Takes a Model and draws it. It specifies a single instance.
+    fn draw_light_model(
+        &mut self,
+        model: &'a Model,
+        camera_bind_group: &'a wgpu::BindGroup,
+        light_bind_group: &'a wgpu::BindGroup,
+    );
+
+    /// Uses a Model and draws the amount of specified instances.
+    /// Uses `draw_mesh_instanced` in a loop.
+    fn draw_light_model_instanced(
+        &mut self,
+        model: &'a Model,
+        instances: Range<u32>,
+        camera_bind_group: &'a wgpu::BindGroup,
+        light_bind_group: &'a wgpu::BindGroup,
+    );
+}
+
+
+impl<'a, 'b> DrawLight<'b> for wgpu::RenderPass<'a>
+    where
+        'b: 'a,
+{
+    fn draw_light_mesh(
+        &mut self,
+        mesh: &'b Mesh,
+        camera_bind_group: &'b wgpu::BindGroup,
+        light_bind_group: &'b wgpu::BindGroup,
+    ) {
+        self.draw_light_mesh_instanced(mesh, 0..1, camera_bind_group, light_bind_group);
+    }
+
+    fn draw_light_mesh_instanced(
+        &mut self,
+        mesh: &'b Mesh,
+        instances: Range<u32>,
+        camera_bind_group: &'b wgpu::BindGroup,
+        light_bind_group: &'b wgpu::BindGroup,
+    ) {
+        self.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+        self.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+        self.set_bind_group(0, camera_bind_group, &[]);
+        self.set_bind_group(1, light_bind_group, &[]);
+        self.draw_indexed(0..mesh.num_elements, 0, instances);
+    }
+
+    fn draw_light_model(
+        &mut self,
+        model: &'b Model,
+        camera_bind_group: &'b wgpu::BindGroup,
+        light_bind_group: &'b wgpu::BindGroup,
+    ) {
+        self.draw_light_model_instanced(model, 0..1, camera_bind_group, light_bind_group);
+    }
+    fn draw_light_model_instanced(
+        &mut self,
+        model: &'b Model,
+        instances: Range<u32>,
+        camera_bind_group: &'b wgpu::BindGroup,
+        light_bind_group: &'b wgpu::BindGroup,
+    ) {
+        for mesh in &model.meshes {
+            self.draw_light_mesh_instanced(mesh, instances.clone(), camera_bind_group, light_bind_group);
         }
     }
 }
