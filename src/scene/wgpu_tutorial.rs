@@ -1,8 +1,9 @@
+use std::time::Duration;
 use crate::engine::assets::Assets;
 use crate::engine::resource::instance::{Instance, InstanceRaw};
 use crate::engine::resource::light::Light;
 use winit::dpi::PhysicalSize;
-use winit::event::WindowEvent;
+use winit::event::{WindowEvent, MouseButton, ElementState, DeviceEvent};
 
 use crate::engine::resource::model::{DrawLight, DrawModel, Model, ModelVertex};
 use crate::engine::resource::texture::Texture;
@@ -26,6 +27,8 @@ pub struct WgpuTutorial {
 
     light: Light,
     light_bind_group: wgpu::BindGroup,
+
+    mouse_pressed: bool,
 }
 
 const NUM_INSTANCES_PER_ROW: u32 = 10;
@@ -44,17 +47,7 @@ impl Scene for WgpuTutorial {
             .unwrap();
 
         // Camera
-        let camera_controller = CameraController::new(
-            0.2,
-            (0.0, 1.0, 2.0).into(),
-            (0.0, 0.0, 0.0).into(),
-            glam::Vec3::Y,
-            config.width as f32 / config.height as f32,
-            45.0,
-            0.1,
-            100.0,
-            device,
-        );
+        let camera_controller = CameraController::new(4.0, 0.4, device, config);
         let camera_bind_group_layout = Camera::bind_group_layout(device);
         let camera_bind_group = camera_controller
             .camera
@@ -147,14 +140,16 @@ impl Scene for WgpuTutorial {
             light_bind_group,
             assets,
             light,
+            mouse_pressed: false
         })
     }
 
-    fn update(&mut self, queue: &wgpu::Queue) {
-        self.camera_controller.update_camera();
+    fn update(&mut self, queue: &wgpu::Queue, dt: Duration) {
+        // Updating camera position
+        self.camera_controller.update_camera(dt);
         self.camera_controller
             .camera_uniform
-            .update_view_proj(&self.camera_controller.camera);
+            .update_view_proj(&self.camera_controller.camera, &self.camera_controller.projection);
         queue.write_buffer(
             &self.camera_controller.camera.buffer,
             0,
@@ -163,7 +158,7 @@ impl Scene for WgpuTutorial {
 
         // Update light position
         self.light.light_uniform.position =
-            glam::Quat::from_axis_angle(glam::Vec3::new(0.0, 1.0, 0.0), 0.01)
+            glam::Quat::from_axis_angle(glam::Vec3::new(0.0, 1.0, 0.0), 1.0 * dt.as_secs_f32())
                 * self.light.light_uniform.position;
 
         queue.write_buffer(
@@ -227,16 +222,34 @@ impl Scene for WgpuTutorial {
             WindowEvent::KeyboardInput { event, .. } => {
                 self.camera_controller.keyboard_input(event);
             }
+            WindowEvent::MouseWheel { delta, ..} => {
+                self.camera_controller.scroll_input(delta);
+            }
+            WindowEvent::MouseInput {
+                button: MouseButton::Left, state,
+                ..
+            } => {
+                self.mouse_pressed = *state == ElementState::Pressed;
+            }
             _ => (),
+        }
+    }
+
+    fn device_input(&mut self, event: &DeviceEvent) {
+        if let DeviceEvent::MouseMotion { delta} = event {
+            if self.mouse_pressed {
+                self.camera_controller.mouse_input(delta.0, delta.1);
+            }
         }
     }
 
     fn resize(
         &mut self,
-        _new_size: PhysicalSize<u32>,
+        new_size: PhysicalSize<u32>,
         device: &wgpu::Device,
         config: &wgpu::SurfaceConfiguration,
     ) {
         self.assets.depth_texture = Texture::create_depth_texture(device, config);
+        self.camera_controller.projection.resize(new_size.width, new_size.height);
     }
 }

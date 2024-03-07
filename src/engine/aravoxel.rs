@@ -1,5 +1,6 @@
 use std::sync::Arc;
-use winit::event::{ Event, WindowEvent};
+use std::time::{Duration, Instant};
+use winit::event::{DeviceEvent, Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::{Window, WindowBuilder};
 use crate::scene::scene::Scene;
@@ -99,9 +100,14 @@ impl Aravoxel<'_> {
     fn input(&mut self, event: &WindowEvent) {
         self.scene.input(event);
     }
+    
+    // Handles things such as mouse movement.
+    fn device_input(&mut self, event: &DeviceEvent) {
+        self.scene.device_input(event);
+    }
 
-    fn update(&mut self) {
-        self.scene.update(&self.queue);
+    fn update(&mut self, dt: Duration) {
+        self.scene.update(&self.queue, dt);
     }
 
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
@@ -138,7 +144,8 @@ pub async fn run() {
         .unwrap());
 
     let mut aravoxel = Aravoxel::new(window).await;
-
+    
+    let mut last_render_time = Instant::now();
     event_loop.set_control_flow(ControlFlow::Poll);
     event_loop.run(move |event, elwt| {
         // Everything related to just window specific events.
@@ -147,13 +154,17 @@ pub async fn run() {
             Event::AboutToWait => {
                 aravoxel.window().request_redraw();
             }
+            Event::DeviceEvent { event, ..} => aravoxel.device_input(&event),
             Event::WindowEvent { event, window_id} => {
                 if window_id == aravoxel.window().id() {
                     // This function handles scene specific input.
                     aravoxel.input(&event);
                     match event {
                         WindowEvent::RedrawRequested => {
-                            aravoxel.update();
+                            let now = Instant::now();
+                            let dt = now - last_render_time;
+                            last_render_time = now;
+                            aravoxel.update(dt);
                             match aravoxel.render() {
                                 Ok(_) => {}
                                 // Reconfigure if we lose the surface.
