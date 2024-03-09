@@ -1,5 +1,4 @@
 use std::time::Duration;
-use crate::engine::assets::Assets;
 use crate::engine::resource::instance::{Instance, InstanceRaw};
 use crate::engine::resource::light::Light;
 use winit::dpi::PhysicalSize;
@@ -7,13 +6,14 @@ use winit::event::{WindowEvent, MouseButton, ElementState, DeviceEvent};
 
 use crate::engine::resource::model::{DrawLight, DrawModel, Model, ModelVertex};
 use crate::engine::resource::texture::Texture;
+use crate::engine::resource_manager::ResourceManager;
 use crate::engine::util::{create_render_pipeline, load_model, Vertex};
 use crate::entity::camera::{Camera, CameraController};
 use crate::scene::scene::Scene;
 
 #[allow(dead_code)]
 pub struct WgpuTutorial {
-    assets: Assets,
+    resource_manager: ResourceManager,
     render_pipeline: wgpu::RenderPipeline,
     light_render_pipeline: wgpu::RenderPipeline,
 
@@ -39,7 +39,21 @@ impl Scene for WgpuTutorial {
         config: &wgpu::SurfaceConfiguration,
         queue: &wgpu::Queue,
     ) -> Box<Self> {
-        let assets = Assets::new(device, config).await;
+        let mut resource_manager = ResourceManager::new(device, config);
+
+        // Shader setup
+        resource_manager.load_shader(
+            "shader.wgsl",
+            "color_shader",
+            device
+        ).await;
+
+        resource_manager.load_shader(
+            "light.wgsl",
+            "light_shader",
+            device
+        ).await;
+
         let texture_bind_group_layout = Texture::bind_group_layout(device);
 
         let obj_model = load_model("cube.obj", device, queue, &texture_bind_group_layout)
@@ -102,8 +116,8 @@ impl Scene for WgpuTutorial {
                 config.format,
                 Some(Texture::DEPTH_FORMAT),
                 &[ModelVertex::desc(), InstanceRaw::desc()],
-                &assets.color_shader,
-                Some("Color Render Pipeline"),
+                resource_manager.shaders.lock().unwrap().get("color_shader").unwrap(),
+                Some("Color Render Pipeline")
             )
         };
 
@@ -124,12 +138,13 @@ impl Scene for WgpuTutorial {
                 config.format,
                 Some(Texture::DEPTH_FORMAT),
                 &[ModelVertex::desc()],
-                &assets.light_shader,
+                resource_manager.shaders.lock().unwrap().get("light_shader").unwrap(),
                 Some("Light Render Pipeline"),
             )
         };
 
         Box::from(Self {
+            resource_manager,
             render_pipeline,
             light_render_pipeline,
             camera_controller,
@@ -138,7 +153,6 @@ impl Scene for WgpuTutorial {
             obj_model,
             camera_bind_group,
             light_bind_group,
-            assets,
             light,
             mouse_pressed: false
         })
@@ -188,7 +202,7 @@ impl Scene for WgpuTutorial {
                 }),
             ],
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                view: &self.assets.depth_texture.view,
+                view: &self.resource_manager.depth_texture.view,
                 depth_ops: Some(wgpu::Operations {
                     load: wgpu::LoadOp::Clear(1.0),
                     store: wgpu::StoreOp::Store,
@@ -249,7 +263,7 @@ impl Scene for WgpuTutorial {
         device: &wgpu::Device,
         config: &wgpu::SurfaceConfiguration,
     ) {
-        self.assets.depth_texture = Texture::create_depth_texture(device, config);
+        self.resource_manager.depth_texture = Texture::create_depth_texture(device, config);
         self.camera_controller.projection.resize(new_size.width, new_size.height);
     }
 }
