@@ -42,9 +42,9 @@ impl CameraController {
 
         let camera = Camera::new(
             buffer,
-            glam::Vec3::new(0.0, 0.5, 10.0),
+            glam::Vec3::new(0.0, 14.5, 37.0),
             -90.0,
-            -20.0
+            -0.0
         );
 
         let projection = Projection::new(

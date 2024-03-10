@@ -4,7 +4,7 @@ use winit::event::{DeviceEvent, Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::{Window, WindowBuilder};
 use crate::scene::scene::Scene;
-use crate::scene::wgpu_tutorial::WgpuTutorial;
+use crate::scene::voxel_world::VoxelWorld;
 
 /// The engine itself. Handles everything relating to the window and
 /// ensuring that the right states are doing the things.
@@ -16,7 +16,7 @@ pub struct Aravoxel<'window> {
     size: winit::dpi::PhysicalSize<u32>,
     window: Arc<Window>,
 
-    scene: WgpuTutorial,
+    scene: VoxelWorld,
 }
 
 impl Aravoxel<'_> {
@@ -66,7 +66,7 @@ impl Aravoxel<'_> {
         };
         surface.configure(&device, &config);
 
-        let scene = WgpuTutorial::new(&device, &config, &queue).await;
+        let scene = VoxelWorld::new(&device, &config, &queue).await;
         Self {
             window,
             surface,
