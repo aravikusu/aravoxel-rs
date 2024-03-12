@@ -70,6 +70,7 @@ impl ChunkModel {
                                 local_pos,
                                 world_pos,
                                 vertices.len() as u32,
+                                &self.chunks,
                             );
 
                             vertices.extend(m_vert);
@@ -107,7 +108,7 @@ impl ChunkModel {
     }
 
     pub fn add_chunk(&mut self, chunk_pos: glam::IVec3) {
-        let mut chunk = Chunk::new();
+        let mut chunk = Chunk::new(chunk_pos);
         chunk.generate(chunk_pos);
 
         self.chunks.insert(chunk_pos, chunk);
@@ -116,12 +117,16 @@ impl ChunkModel {
 
 #[derive(Debug)]
 pub struct Chunk {
+    position: glam::IVec3,
     voxels: Vec<Voxel>,
 }
 
 impl Chunk {
-    pub fn new() -> Self {
-        Self { voxels: Vec::new() }
+    pub fn new(position: glam::IVec3) -> Self {
+        Self {
+            position,
+            voxels: Vec::new()
+        }
     }
 
     /// Generate a Chunk based on current position.
@@ -153,25 +158,87 @@ impl Chunk {
         self.voxels = voxels;
     }
 
-    /// Check if a solid voxel exists at the specified coordinates.
-    /// Used while drawing the voxels so we only draw the visible sides.
-    pub fn is_void(&self, pos: glam::IVec3) -> bool {
-        let x = pos.x;
-        let y = pos.y;
-        let z = pos.z;
+    pub fn is_void(
+        &self,
+        voxel_pos: glam::IVec3,
+        world_chunks: &HashMap<glam::IVec3, Chunk>
+    ) -> bool {
+        let x = voxel_pos.x;
+        let y = voxel_pos.y;
+        let z = voxel_pos.z;
 
-        // First check if the position is even within the boundaries of a chunk to begin with
+        // First check if the position is local
         if (0..CHUNK_SIZE).contains(&x)
             && (0..CHUNK_SIZE).contains(&y)
             && (0..CHUNK_SIZE).contains(&z)
         {
-            // Now we get the actual index of the voxel and check it.
+            // Voxel exists inside of our chunk. Get the index and check it.
             let idx = (x + CHUNK_SIZE * z + CHUNK_AREA * y) as usize;
             if let Some(voxel) = self.voxels.get(idx) {
                 return !voxel.is_solid;
             }
-        }
+        } else {
+            // Voxel exceeds chunk boundaries.
+            // We need to know check the neighboring Chunk's voxel
+            // to find out if we should draw or not.
+            // FIXME: Probably refactor, this isn't great...
+            
+            let c_pos = self.position;
+            let mut neighbor_chunk_idx = glam::IVec3::ZERO;
+            let mut neightbor_voxel_pos = glam::IVec3::ZERO;
+            if x > (CHUNK_SIZE - 1) {
+                neighbor_chunk_idx = glam::IVec3::new(c_pos.x + 1, c_pos.y, c_pos.z);
+                neightbor_voxel_pos = glam::IVec3::new(0, y, z);
+            } else if x < 0 {
+                neighbor_chunk_idx = glam::IVec3::new(c_pos.x - 1, c_pos.y, c_pos.z);
+                neightbor_voxel_pos = glam::IVec3::new(31, y, z);
+            }
 
+            if y > (CHUNK_SIZE - 1) {
+                neighbor_chunk_idx = glam::IVec3::new(c_pos.x, c_pos.y + 1, c_pos.z);
+                neightbor_voxel_pos = glam::IVec3::new(x, 0, z);
+            } else if y < 0 {
+                neighbor_chunk_idx = glam::IVec3::new(c_pos.x, c_pos.y - 1, c_pos.z);
+                neightbor_voxel_pos = glam::IVec3::new(x, 31, z);
+            }
+
+            if z > (CHUNK_SIZE - 1) {
+                neighbor_chunk_idx = glam::IVec3::new(c_pos.x, c_pos.y, c_pos.z + 1);
+                neightbor_voxel_pos = glam::IVec3::new(x, y, 0);
+            } else if z < 0 {
+                neighbor_chunk_idx = glam::IVec3::new(c_pos.x, c_pos.y, c_pos.z - 1);
+                neightbor_voxel_pos = glam::IVec3::new(x, y, 31);
+            }
+
+            return Chunk::check_neighboring_chunk(neighbor_chunk_idx, neightbor_voxel_pos, world_chunks)
+        }
         true
+    }
+    
+    /// Tries to check the desired Voxel inside of a specified Chunk.
+    /// 
+    /// * `chunk_idx`: The key for the Chunk we're interested in.
+    /// * `voxel_pos`: The local position of the Voxel we're interested in.
+    /// * `world_chunks`: All of the loaded chunks located in our world.
+    fn check_neighboring_chunk(
+        chunk_idx: glam::IVec3,
+        voxel_pos: glam::IVec3,
+        world_chunks: &HashMap<glam::IVec3, Chunk>
+    ) -> bool {
+        let x = voxel_pos.x;
+        let y = voxel_pos.y;
+        let z = voxel_pos.z;
+        match world_chunks.get(&chunk_idx) {
+            Some(chunk) => {
+                let voxel_idx = (x + CHUNK_SIZE * z + CHUNK_AREA * y) as usize;
+
+                if let Some(voxel) = chunk.voxels.get(voxel_idx) {
+                    return !voxel.is_solid;
+                }
+                
+                true
+            }
+            None => false
+        }
     }
 }

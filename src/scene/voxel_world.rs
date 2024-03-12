@@ -54,8 +54,8 @@ impl Scene for VoxelWorld {
         let mut chunk_model = ChunkModel::new();
 
         for x in 0..5 {
-            for z in 0..1 {
-                for y in 0..1 {
+            for z in 0..5 {
+                for y in 0..5 {
                     chunk_model.add_chunk(glam::IVec3::new(x, y, z));
                 }
             }
@@ -64,7 +64,7 @@ impl Scene for VoxelWorld {
         chunk_model.build(&texture_bind_group_layout, device, queue).await;
 
         // Camera
-        let camera_controller = CameraController::new(4.0, 0.4, device, config);
+        let camera_controller = CameraController::new(14.0, 0.4, device, config);
         let camera_bind_group_layout = Camera::bind_group_layout(device);
         let camera_bind_group = camera_controller
             .camera

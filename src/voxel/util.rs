@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use crate::engine::resource::model::ModelVertex;
 use crate::voxel::chunk::Chunk;
 
@@ -15,12 +16,14 @@ pub const CHUNK_VOL: i32 = CHUNK_AREA * CHUNK_SIZE;
 /// * `local_pos` - This Voxel's local position within this Chunk.
 /// * `world_pos` - This Voxel's *world position*. Necessary to correctly draw the vertices.
 /// * `start_index` - The current amount of Vertices. Used to set the indices correctly.
-/// In order to properly decide on if we should render a side of the voxel or not.
+/// * `world_chunks` - All of the chunks inside our world. Used so we can access another Chunk's
+/// Voxels while we draw in case the neighboring Voxel isn't local to our current Chunk.
 pub fn create_chunk_mesh_data(
     chunk: &Chunk,
     local_pos: glam::Vec3,
     world_pos: glam::Vec3,
-    start_index: u32
+    start_index: u32,
+    world_chunks: &HashMap<glam::IVec3, Chunk>
 ) -> (Vec<ModelVertex>, Vec<u32>) {
     // Local position of Voxel within this Chunk
     let lx = local_pos.x as i32;
@@ -38,7 +41,7 @@ pub fn create_chunk_mesh_data(
     let mut unique_verts: u32 = start_index;
 
     // Check if there's a visible voxel above above
-    if chunk.is_void(glam::IVec3::new(lx, ly + 1, lz)) {
+    if chunk.is_void(glam::IVec3::new(lx, ly + 1, lz), world_chunks) {
         model_verts.extend(
             vec!(
                 ModelVertex { position: [wx + -0.5, wy + 0.5, wz + -0.5], tex_coords: [0.0, 0.0], normal:[0.0, 1.0, 0.0]},
@@ -52,7 +55,7 @@ pub fn create_chunk_mesh_data(
     }
 
     // Check under...
-    if chunk.is_void(glam::IVec3::new(lx, ly - 1, lz)) {
+    if chunk.is_void(glam::IVec3::new(lx, ly - 1, lz), world_chunks) {
         model_verts.extend(
             vec!(
                 ModelVertex { position: [wx + -0.5, wy + -0.5, wz + -0.5], tex_coords: [0.0, 0.0], normal:[0.0, -1.0, 0.0]},
@@ -67,7 +70,7 @@ pub fn create_chunk_mesh_data(
     }
 
     // Right
-    if chunk.is_void(glam::IVec3::new(lx + 1, ly, lz)) {
+    if chunk.is_void(glam::IVec3::new(lx + 1, ly, lz), world_chunks) {
         model_verts.extend(
             vec!(
                 ModelVertex { position: [wx + 0.5, wy + -0.5, wz + -0.5], tex_coords: [0.0, 0.0], normal:[1.0, 0.0, 0.0]},
@@ -82,7 +85,7 @@ pub fn create_chunk_mesh_data(
     }
 
     // Left
-    if chunk.is_void(glam::IVec3::new(lx - 1, ly, lz)) {
+    if chunk.is_void(glam::IVec3::new(lx - 1, ly, lz), world_chunks) {
         model_verts.extend(
             vec!(
                 ModelVertex { position: [wx + -0.5, wy + -0.5, wz + -0.5], tex_coords: [0.0, 0.0], normal:[-1.0, 0.0, 0.0]},
@@ -97,7 +100,7 @@ pub fn create_chunk_mesh_data(
     }
 
     // Behind
-    if chunk.is_void(glam::IVec3::new(lx, ly, lz + 1)) {
+    if chunk.is_void(glam::IVec3::new(lx, ly, lz + 1), world_chunks) {
         model_verts.extend(
             vec!(
                 ModelVertex { position: [wx + -0.5, wy + -0.5, wz + 0.5], tex_coords: [0.0, 0.0], normal:[0.0, 0.0, 1.0]},
@@ -112,7 +115,7 @@ pub fn create_chunk_mesh_data(
     }
 
     // In front
-    if chunk.is_void(glam::IVec3::new(lx, ly, lz - 1)) {
+    if chunk.is_void(glam::IVec3::new(lx, ly, lz - 1), world_chunks) {
         model_verts.extend(
             vec!(
                 ModelVertex { position: [wx + -0.5, wy + -0.5, wz + -0.5], tex_coords: [0.0, 0.0], normal:[0.0, 0.0, -1.0]},
