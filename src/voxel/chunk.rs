@@ -3,7 +3,7 @@ use libnoise::prelude::*;
 use crate::engine::resource::model::{Material, Mesh, Model, ModelVertex};
 use crate::engine::resource::texture::Texture;
 use crate::engine::util::load_texture;
-use crate::voxel::util::{CHUNK_AREA, CHUNK_SIZE, CHUNK_SIZE_F32, CHUNK_VOL, create_chunk_indices, create_chunk_vertices};
+use crate::voxel::util::{CHUNK_AREA, CHUNK_SIZE, CHUNK_SIZE_F32, CHUNK_VOL, create_chunk_indices, create_chunk_mesh_data, create_chunk_vertices};
 
 #[derive(Debug, Clone)]
 struct Voxel {
@@ -38,7 +38,7 @@ impl ChunkModel {
         // We first iterate through our chunks and build all of the meshes
         // based on the chunk data we have
         let mut meshes: Vec<Mesh> = Vec::new();
-
+        
         for (chunk_pos, chunk) in &self.chunks {
             let mut vertices: Vec<ModelVertex> = Vec::new();
             let mut indices: Vec<u32> = Vec::new();
@@ -58,9 +58,13 @@ impl ChunkModel {
                                 y as f32 + chunk_pos.y as f32 * CHUNK_SIZE_F32,
                                 z as f32 + chunk_pos.z as f32 * CHUNK_SIZE_F32,
                             );
-
-                            vertices.extend(create_chunk_vertices(pos));
-                            indices.extend(create_chunk_indices(vertices.len() as u32));
+                            
+                            let (m_vert, m_idx) = create_chunk_mesh_data(chunk, pos, vertices.len() as u32);
+                            
+                            vertices.extend(m_vert);
+                            indices.extend(m_idx);
+                            //vertices.extend(create_chunk_vertices(pos));
+                            //indices.extend(create_chunk_indices(vertices.len() as u32));
                         }
                     }
                 }
@@ -108,10 +112,12 @@ impl Chunk {
     pub fn new() -> Self {
         Self { voxels: Vec::new() }
     }
-
+    
+    /// Generate a Chunk based on current position.
     pub fn generate(&mut self, chunk_pos: glam::IVec3) {
         let mut voxels: Vec<Voxel> = vec![Voxel { is_solid: false}; CHUNK_VOL as usize];
-        let noise = Source::simplex(42069);
+        let noise = Source::simplex(42069)
+            .fbm(1, 1.0, 2.0, 0.5);
 
         let new_pos = chunk_pos * CHUNK_SIZE;
 
@@ -134,5 +140,14 @@ impl Chunk {
             }
         }
         self.voxels = voxels;
+    }
+
+    pub fn voxel_visible(&self, voxel_index: i32) -> bool {
+        if let Some(voxel) = self.voxels.get(voxel_index as usize) {
+            voxel.is_solid
+        } else {
+            //println!("no neighbor for idx {}", voxel_index);
+            false
+        }
     }
 }

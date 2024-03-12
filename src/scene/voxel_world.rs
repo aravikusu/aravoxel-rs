@@ -54,8 +54,8 @@ impl Scene for VoxelWorld {
         let mut chunk_model = ChunkModel::new();
 
         for x in 0..5 {
-            for z in 0..5 {
-                for y in 0..5 {
+            for z in 0..1 {
+                for y in 0..1 {
                     chunk_model.add_chunk(glam::IVec3::new(x, y, z));
                 }
             }
